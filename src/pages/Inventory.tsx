@@ -81,6 +81,9 @@ import {
   getInventoryItemsByCategory
 } from '@/lib/firebase/inventoryService';
 
+// Import settings service
+import { getUserSettings, UserSettings, defaultSettings } from '@/lib/firebase/settingsService';
+
 const Inventory = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -102,6 +105,7 @@ const Inventory = () => {
   const [itemToAdjust, setItemToAdjust] = useState<InventoryItem | null>(null);
   const [adjustmentQuantity, setAdjustmentQuantity] = useState<number>(0);
   const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
+  const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [newItem, setNewItem] = useState<Omit<InventoryItem, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>({
     name: '',
     category: 'Medication',
@@ -122,18 +126,23 @@ const Inventory = () => {
     'Office Supplies'
   ];
 
-  // Fetch inventory items from Firebase
+  // Fetch inventory items and settings from Firebase
   useEffect(() => {
-    const fetchInventoryItems = async () => {
+    const fetchData = async () => {
       if (!user) return;
       
       setLoading(true);
       try {
+        // Fetch user settings
+        const userSettings = await getUserSettings(user.uid);
+        setSettings(userSettings);
+        
+        // Fetch inventory items
         const items = await getAllInventoryItems(user.uid);
         setInventoryItems(items);
         setFilteredItems(items);
       } catch (error) {
-        console.error('Error fetching inventory items:', error);
+        console.error('Error fetching data:', error);
         toast({
           title: 'Error',
           description: 'Failed to load inventory items',
@@ -144,7 +153,7 @@ const Inventory = () => {
       }
     };
 
-    fetchInventoryItems();
+    fetchData();
   }, [user, toast]);
 
   // Filter items based on search and category
@@ -280,36 +289,36 @@ const Inventory = () => {
       // Don't allow negative quantities
       if (newQuantity < 0) {
         toast({
-          title: 'Invalid adjustment',
+          title: 'Error',
           description: 'Stock quantity cannot be negative.',
           variant: 'destructive',
         });
         return;
       }
       
-      // Update item in Firebase
+      // Update the quantity in the database
       await updateInventoryItem(itemToAdjust.id, {
         quantity: newQuantity
       });
       
-      // Update local state
+      // Update the local state
       setInventoryItems(prev => 
         prev.map(item => 
-          item.id === itemToAdjust.id 
-            ? { ...item, quantity: newQuantity } 
+          item.id === itemToAdjust.id
+            ? { ...item, quantity: newQuantity }
             : item
         )
       );
       
       toast({
-        title: 'Stock adjusted',
-        description: `Stock level for ${itemToAdjust.name} was adjusted by ${adjustmentQuantity > 0 ? '+' : ''}${adjustmentQuantity}.`,
+        title: 'Success',
+        description: `Stock adjusted by ${adjustmentQuantity > 0 ? '+' : ''}${adjustmentQuantity} units.`,
       });
       
-      // Reset and close dialog
+      // Close the dialog
+      setIsAdjustmentOpen(false);
       setItemToAdjust(null);
       setAdjustmentQuantity(0);
-      setIsAdjustmentOpen(false);
     } catch (error) {
       console.error('Error adjusting stock:', error);
       toast({
@@ -331,7 +340,7 @@ const Inventory = () => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: settings?.financial?.currency || 'USD',
     }).format(amount);
   };
 
