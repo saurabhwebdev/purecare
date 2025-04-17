@@ -92,6 +92,10 @@ const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
+  const [isEditItemOpen, setIsEditItemOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+  const [isViewHistoryOpen, setIsViewHistoryOpen] = useState(false);
+  const [itemToViewHistory, setItemToViewHistory] = useState<InventoryItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -244,11 +248,17 @@ const Inventory = () => {
 
   // Handle editing an item
   const handleEditItem = (id: string) => {
-    // This would navigate to an edit page in a real app
-    toast({
-      title: 'Edit Item',
-      description: `Editing item ${id}`,
-    });
+    const itemToEdit = inventoryItems.find(item => item.id === id);
+    if (itemToEdit) {
+      setItemToEdit(itemToEdit);
+      setIsEditItemOpen(true);
+    }
+  };
+
+  // Handle viewing item history
+  const handleViewHistory = (item: InventoryItem) => {
+    setItemToViewHistory(item);
+    setIsViewHistoryOpen(true);
   };
 
   // Handle stock adjustment
@@ -323,6 +333,66 @@ const Inventory = () => {
       style: 'currency',
       currency: 'USD',
     }).format(amount);
+  };
+
+  // Save edited item
+  const saveEditedItem = async () => {
+    if (!user || !itemToEdit || !itemToEdit.id) return;
+    
+    setIsSaving(true);
+    try {
+      // Update the item in the database
+      await updateInventoryItem(itemToEdit.id, {
+        name: itemToEdit.name,
+        category: itemToEdit.category,
+        quantity: itemToEdit.quantity,
+        unit: itemToEdit.unit,
+        reorderLevel: itemToEdit.reorderLevel,
+        expiryDate: itemToEdit.expiryDate,
+        supplierName: itemToEdit.supplierName,
+        supplierContact: itemToEdit.supplierContact,
+        purchasePrice: itemToEdit.purchasePrice,
+        sellingPrice: itemToEdit.sellingPrice,
+        location: itemToEdit.location,
+        notes: itemToEdit.notes
+      });
+      
+      // Update the local state
+      setInventoryItems(prev => 
+        prev.map(item => 
+          item.id === itemToEdit.id ? itemToEdit : item
+        )
+      );
+      
+      toast({
+        title: 'Success',
+        description: 'Item updated successfully',
+      });
+      
+      // Close the dialog
+      setIsEditItemOpen(false);
+      setItemToEdit(null);
+    } catch (error) {
+      console.error('Error updating item:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update item',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Update edited item field
+  const updateEditedItemField = (field: keyof Omit<InventoryItem, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, value: any) => {
+    setItemToEdit(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        [field]: value
+      };
+    });
   };
 
   return (
@@ -617,7 +687,7 @@ const Inventory = () => {
                               <Loader className="h-4 w-4 mr-2" />
                               Adjust Stock
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toast({ title: 'View History', description: 'Item history would display here.' })}>
+                            <DropdownMenuItem onClick={() => handleViewHistory(item)}>
                               <ClipboardList className="h-4 w-4 mr-2" />
                               View History
                             </DropdownMenuItem>
@@ -758,6 +828,266 @@ const Inventory = () => {
                   Saving...
                 </>
               ) : 'Adjust Stock'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Item Dialog */}
+      <Dialog open={isEditItemOpen} onOpenChange={setIsEditItemOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Inventory Item</DialogTitle>
+            <DialogDescription>
+              Update the item details below.
+            </DialogDescription>
+          </DialogHeader>
+          {itemToEdit && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name">Item Name</Label>
+                  <Input
+                    id="edit-name"
+                    value={itemToEdit.name}
+                    onChange={(e) => updateEditedItemField('name', e.target.value)}
+                    placeholder="Enter item name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Category</Label>
+                  <Select
+                    value={itemToEdit.category}
+                    onValueChange={(value) => updateEditedItemField('category', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-quantity">Quantity</Label>
+                  <Input
+                    id="edit-quantity"
+                    type="number"
+                    min="0"
+                    value={itemToEdit.quantity.toString()}
+                    onChange={(e) => updateEditedItemField('quantity', parseInt(e.target.value) || 0)}
+                    placeholder="Enter quantity"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-unit">Unit</Label>
+                  <Input
+                    id="edit-unit"
+                    value={itemToEdit.unit}
+                    onChange={(e) => updateEditedItemField('unit', e.target.value)}
+                    placeholder="Enter unit (e.g., tablets, boxes)"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-reorderLevel">Reorder Level</Label>
+                  <Input
+                    id="edit-reorderLevel"
+                    type="number"
+                    min="0"
+                    value={itemToEdit.reorderLevel.toString()}
+                    onChange={(e) => updateEditedItemField('reorderLevel', parseInt(e.target.value) || 0)}
+                    placeholder="Enter reorder level"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-expiryDate">Expiry Date (if applicable)</Label>
+                  <Input
+                    id="edit-expiryDate"
+                    type="date"
+                    value={itemToEdit.expiryDate || ''}
+                    onChange={(e) => updateEditedItemField('expiryDate', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-supplierName">Supplier Name</Label>
+                  <Input
+                    id="edit-supplierName"
+                    value={itemToEdit.supplierName || ''}
+                    onChange={(e) => updateEditedItemField('supplierName', e.target.value)}
+                    placeholder="Enter supplier name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-supplierContact">Supplier Contact</Label>
+                  <Input
+                    id="edit-supplierContact"
+                    value={itemToEdit.supplierContact || ''}
+                    onChange={(e) => updateEditedItemField('supplierContact', e.target.value)}
+                    placeholder="Enter supplier contact"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-purchasePrice">Purchase Price</Label>
+                  <Input
+                    id="edit-purchasePrice"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={itemToEdit.purchasePrice.toString()}
+                    onChange={(e) => updateEditedItemField('purchasePrice', parseFloat(e.target.value) || 0)}
+                    placeholder="Enter purchase price"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-sellingPrice">Selling Price</Label>
+                  <Input
+                    id="edit-sellingPrice"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={itemToEdit.sellingPrice.toString()}
+                    onChange={(e) => updateEditedItemField('sellingPrice', parseFloat(e.target.value) || 0)}
+                    placeholder="Enter selling price"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-location">Storage Location</Label>
+                  <Input
+                    id="edit-location"
+                    value={itemToEdit.location || ''}
+                    onChange={(e) => updateEditedItemField('location', e.target.value)}
+                    placeholder="Enter storage location"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-notes">Notes</Label>
+                  <Input
+                    id="edit-notes"
+                    value={itemToEdit.notes || ''}
+                    onChange={(e) => updateEditedItemField('notes', e.target.value)}
+                    placeholder="Enter additional notes"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsEditItemOpen(false);
+                setItemToEdit(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={saveEditedItem}
+              disabled={!itemToEdit || !itemToEdit.name || isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <Loader className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View History Dialog */}
+      <Dialog open={isViewHistoryOpen} onOpenChange={setIsViewHistoryOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Item History</DialogTitle>
+            <DialogDescription>
+              {itemToViewHistory ? `History for ${itemToViewHistory.name}` : 'Loading history...'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-4">
+              {itemToViewHistory ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <h3 className="font-medium">Item Details</h3>
+                      <div className="p-4 rounded-md border">
+                        <dl className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <dt className="font-medium">Name:</dt>
+                            <dd>{itemToViewHistory.name}</dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="font-medium">Category:</dt>
+                            <dd>{itemToViewHistory.category}</dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="font-medium">Current Stock:</dt>
+                            <dd>{itemToViewHistory.quantity} {itemToViewHistory.unit}</dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="font-medium">Added On:</dt>
+                            <dd>
+                              {itemToViewHistory.createdAt && typeof itemToViewHistory.createdAt.toDate === 'function' 
+                                ? itemToViewHistory.createdAt.toDate().toLocaleDateString()
+                                : 'Unknown date'}
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="font-medium">Financial Information</h3>
+                      <div className="p-4 rounded-md border">
+                        <dl className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <dt className="font-medium">Purchase Price:</dt>
+                            <dd>{formatCurrency(itemToViewHistory.purchasePrice)}</dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="font-medium">Selling Price:</dt>
+                            <dd>{formatCurrency(itemToViewHistory.sellingPrice)}</dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="font-medium">Current Inventory Value:</dt>
+                            <dd>{formatCurrency(itemToViewHistory.purchasePrice * itemToViewHistory.quantity)}</dd>
+                          </div>
+                        </dl>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 mt-4">
+                    <h3 className="font-medium">Activity Log</h3>
+                    <div className="border rounded-md">
+                      <div className="p-4 text-center text-muted-foreground">
+                        <ClipboardList className="mx-auto h-12 w-12 opacity-20 mb-2" />
+                        <p>Activity tracking will be implemented in a future update.</p>
+                        <p className="text-sm">This will show stock adjustments, price changes, and other actions.</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-40">
+                  <Loader className="h-8 w-8 animate-spin opacity-50" />
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                setIsViewHistoryOpen(false);
+                setItemToViewHistory(null);
+              }}
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
