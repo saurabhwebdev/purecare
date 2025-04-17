@@ -67,8 +67,14 @@ import {
   MoreVertical,
   AlertTriangle,
   ClipboardList,
-  Loader
+  Loader,
+  CalendarDays,
+  FileDown,
+  FileUp,
+  Loader2,
+  SlidersHorizontal
 } from 'lucide-react';
+import { format } from 'date-fns';
 
 // Import inventory service
 import { 
@@ -80,6 +86,8 @@ import {
   getLowStockItems,
   getInventoryItemsByCategory
 } from '@/lib/firebase/inventoryService';
+import { getUserSettings } from '@/lib/firebase/settingsService';
+import { UserSettings } from '@/lib/firebase/settingsService';
 
 const Inventory = () => {
   const { user } = useAuth();
@@ -102,6 +110,7 @@ const Inventory = () => {
   const [itemToAdjust, setItemToAdjust] = useState<InventoryItem | null>(null);
   const [adjustmentQuantity, setAdjustmentQuantity] = useState<number>(0);
   const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
+  const [settings, setSettings] = useState<UserSettings | null>(null);
   const [newItem, setNewItem] = useState<Omit<InventoryItem, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>({
     name: '',
     category: 'Medication',
@@ -129,9 +138,13 @@ const Inventory = () => {
       
       setLoading(true);
       try {
-        const items = await getAllInventoryItems(user.uid);
+        const [items, userSettings] = await Promise.all([
+          getAllInventoryItems(user.uid),
+          getUserSettings(user.uid)
+        ]);
         setInventoryItems(items);
         setFilteredItems(items);
+        setSettings(userSettings);
       } catch (error) {
         console.error('Error fetching inventory items:', error);
         toast({
@@ -329,9 +342,14 @@ const Inventory = () => {
 
   // Format currency
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    if (!settings) return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
+    }).format(amount);
+
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: settings.financial.currency || 'USD',
     }).format(amount);
   };
 
