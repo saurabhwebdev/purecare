@@ -1,0 +1,728 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import { 
+  Prescription, 
+  getAllPrescriptions, 
+  deletePrescription, 
+  getPrescriptionWithSettings,
+  createPrescription
+} from '@/lib/firebase/prescriptionService';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+  DialogTrigger,
+  DialogClose
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { format } from 'date-fns';
+import { 
+  Plus, 
+  Search, 
+  Trash2, 
+  MoreVertical, 
+  FileText, 
+  Edit, 
+  Eye,
+  PlusCircle,
+  User,
+  Calendar,
+  X
+} from 'lucide-react';
+
+import PrescriptionPDF from '@/components/prescription/PrescriptionPDF';
+import { generatePrescriptionPDF, downloadBlob } from '@/lib/pdf/pdfGenerator';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { getPatients } from '@/lib/firebase/patientService';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+const Prescriptions = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [filteredPrescriptions, setFilteredPrescriptions] = useState<Prescription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [prescriptionToDelete, setPrescriptionToDelete] = useState<string | null>(null);
+  const [showPDFPreview, setShowPDFPreview] = useState(false);
+  const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
+  const [settings, setSettings] = useState<any>(null);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+  
+  // New state for prescription creation
+  const [isAddPrescriptionOpen, setIsAddPrescriptionOpen] = useState(false);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [newPrescription, setNewPrescription] = useState<Partial<Prescription>>({
+    patientId: '',
+    patientName: '',
+    doctorId: '',
+    doctorName: '',
+    diagnosis: '',
+    notes: '',
+    status: 'active',
+    medicines: [{ name: '', dosage: '', frequency: '', duration: '', instructions: '' }]
+  });
+  
+  const pdfRef = useRef<HTMLDivElement>(null);
+
+  // Fetch prescriptions and patients from Firestore
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        const [prescriptionData, patientData] = await Promise.all([
+          getAllPrescriptions(user.uid),
+          getPatients(user.uid)
+        ]);
+        
+        setPrescriptions(prescriptionData);
+        setFilteredPrescriptions(prescriptionData);
+        setPatients(patientData);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load data.',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user, toast]);
+
+  // Filter prescriptions based on search query
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredPrescriptions(prescriptions);
+      return;
+    }
+
+    const lowerCaseQuery = searchQuery.toLowerCase();
+    const filtered = prescriptions.filter(prescription => 
+      prescription.patientName.toLowerCase().includes(lowerCaseQuery) ||
+      prescription.diagnosis?.toLowerCase().includes(lowerCaseQuery) ||
+      prescription.medicines.some(med => med.name.toLowerCase().includes(lowerCaseQuery))
+    );
+
+    setFilteredPrescriptions(filtered);
+  }, [searchQuery, prescriptions]);
+
+  // Format date
+  const formatDate = (date: Date | any) => {
+    if (!date) return 'N/A';
+    try {
+      const dateObj = date instanceof Date ? date : date.toDate();
+      return format(dateObj, 'MMM dd, yyyy');
+    } catch (error) {
+      return 'Invalid Date';
+    }
+  };
+
+  // Handle editing a prescription
+  const handleEditPrescription = (id: string) => {
+    navigate(`/prescriptions/edit/${id}`);
+  };
+
+  // Handle viewing a prescription
+  const handleViewPrescription = (id: string) => {
+    navigate(`/prescriptions/view/${id}`);
+  };
+
+  // Handle deleting a prescription
+  const handleDeleteClick = (id: string) => {
+    setPrescriptionToDelete(id);
+    setShowDeleteDialog(true);
+  };
+
+  // Confirm deletion
+  const confirmDelete = async () => {
+    if (!prescriptionToDelete) return;
+
+    try {
+      await deletePrescription(prescriptionToDelete);
+      
+      // Update local state
+      setPrescriptions(prev => prev.filter(p => p.id !== prescriptionToDelete));
+      setFilteredPrescriptions(prev => prev.filter(p => p.id !== prescriptionToDelete));
+      
+      toast({
+        title: 'Success',
+        description: 'Prescription deleted successfully.',
+      });
+    } catch (error) {
+      console.error('Error deleting prescription:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete prescription.',
+        variant: 'destructive',
+      });
+    } finally {
+      setShowDeleteDialog(false);
+      setPrescriptionToDelete(null);
+    }
+  };
+
+  // Handle showing PDF preview
+  const handleShowPDF = async (prescription: Prescription) => {
+    if (!user) return;
+    
+    try {
+      const { settings, prescription: prescriptionData } = await getPrescriptionWithSettings(user.uid, prescription.id!);
+      
+      setSelectedPrescription(prescriptionData);
+      setSettings(settings);
+      setShowPDFPreview(true);
+    } catch (error) {
+      console.error('Error loading prescription data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load prescription data for PDF.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Generate and download PDF
+  const handleDownloadPDF = async () => {
+    if (!pdfRef.current || !selectedPrescription) return;
+    
+    setGeneratingPDF(true);
+    
+    try {
+      const { blob, filename } = await generatePrescriptionPDF(pdfRef.current, selectedPrescription);
+      downloadBlob(blob, filename);
+      
+      toast({
+        title: 'Success',
+        description: 'Prescription PDF downloaded successfully.',
+      });
+      
+      setShowPDFPreview(false);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to generate prescription PDF.',
+        variant: 'destructive',
+      });
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
+
+  // Get badge variant based on status
+  const getBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'outline';
+      case 'completed':
+        return 'secondary';
+      default:
+        return 'default';
+    }
+  };
+
+  // Update new prescription field
+  const updatePrescriptionField = (field: string, value: any) => {
+    setNewPrescription(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Handle patient selection for new prescription
+  const handlePatientSelection = (patientId: string) => {
+    const selectedPatient = patients.find(patient => patient.id === patientId);
+    if (selectedPatient) {
+      updatePrescriptionField('patientId', patientId);
+      updatePrescriptionField('patientName', selectedPatient.name);
+    }
+  };
+
+  // Add prescription medicine
+  const addMedicine = () => {
+    setNewPrescription(prev => ({
+      ...prev,
+      medicines: [...(prev.medicines || []), { name: '', dosage: '', frequency: '', duration: '', instructions: '' }]
+    }));
+  };
+
+  // Remove prescription medicine
+  const removeMedicine = (index: number) => {
+    setNewPrescription(prev => {
+      const medicines = [...(prev.medicines || [])];
+      if (medicines.length > 1) {
+        medicines.splice(index, 1);
+        return { ...prev, medicines };
+      }
+      return prev;
+    });
+  };
+
+  // Update prescription medicine
+  const updateMedicine = (index: number, field: string, value: string) => {
+    setNewPrescription(prev => {
+      const medicines = [...(prev.medicines || [])];
+      medicines[index] = { ...medicines[index], [field]: value };
+      return { ...prev, medicines };
+    });
+  };
+
+  // Handle creating a new prescription
+  const handleCreatePrescription = async () => {
+    if (!user || !newPrescription.patientId || !newPrescription.patientName) {
+      toast({
+        title: 'Error',
+        description: 'Please select a patient.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Add user ID and doctor name
+      const prescriptionWithUserId = {
+        ...newPrescription,
+        doctorId: user.uid,
+        doctorName: user.displayName || 'Doctor'
+      };
+      
+      // Create prescription
+      await createPrescription(prescriptionWithUserId as Omit<Prescription, 'id'>);
+      
+      // Refresh prescriptions
+      const updatedPrescriptions = await getAllPrescriptions(user.uid);
+      setPrescriptions(updatedPrescriptions);
+      setFilteredPrescriptions(updatedPrescriptions);
+      
+      toast({
+        title: 'Success',
+        description: 'Prescription created successfully',
+      });
+      
+      // Reset form and close dialog
+      setNewPrescription({
+        patientId: '',
+        patientName: '',
+        doctorId: '',
+        doctorName: '',
+        diagnosis: '',
+        notes: '',
+        status: 'active',
+        medicines: [{ name: '', dosage: '', frequency: '', duration: '', instructions: '' }]
+      });
+      setIsAddPrescriptionOpen(false);
+    } catch (error) {
+      console.error('Error creating prescription:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to create prescription',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="w-full backdrop-blur-md bg-background/80 py-4 border-b border-border sticky top-0 z-10">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold">Prescriptions</h1>
+              <p className="text-muted-foreground">Manage patient prescriptions</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative w-full md:w-64">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search prescriptions..."
+                  className="pl-9"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <Dialog open={isAddPrescriptionOpen} onOpenChange={setIsAddPrescriptionOpen}>
+                <DialogTrigger asChild>
+                  <Button className="flex items-center gap-1 whitespace-nowrap">
+                    <PlusCircle className="h-4 w-4" />
+                    <span className="hidden sm:inline">New Prescription</span>
+                    <span className="sm:hidden">New</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Create New Prescription</DialogTitle>
+                    <DialogDescription>
+                      Fill in the details to create a new prescription.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="patient">Patient</Label>
+                        <Select onValueChange={handlePatientSelection}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a patient" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {patients.map((patient) => (
+                              <SelectItem key={patient.id} value={patient.id || ''}>
+                                {patient.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="date">Date</Label>
+                        <Input
+                          id="date"
+                          type="date"
+                          value={format(new Date(), 'yyyy-MM-dd')}
+                          disabled
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="diagnosis">Diagnosis</Label>
+                      <Textarea
+                        id="diagnosis"
+                        value={newPrescription.diagnosis}
+                        onChange={(e) => updatePrescriptionField('diagnosis', e.target.value)}
+                        placeholder="Enter patient diagnosis"
+                      />
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Label>Medications</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={addMedicine}
+                          className="h-8 px-2"
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" />
+                          Add Medication
+                        </Button>
+                      </div>
+                      
+                      {newPrescription.medicines?.map((medicine, index) => (
+                        <div key={index} className="space-y-4 border rounded-lg p-4 relative">
+                          {newPrescription.medicines && newPrescription.medicines.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeMedicine(index)}
+                              className="absolute right-2 top-2 h-8 w-8"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                          
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label htmlFor={`medicine-${index}-name`}>Medication Name</Label>
+                              <Input
+                                id={`medicine-${index}-name`}
+                                value={medicine.name}
+                                onChange={(e) => updateMedicine(index, 'name', e.target.value)}
+                                placeholder="Medication name"
+                              />
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label htmlFor={`medicine-${index}-dosage`}>Dosage</Label>
+                              <Input
+                                id={`medicine-${index}-dosage`}
+                                value={medicine.dosage}
+                                onChange={(e) => updateMedicine(index, 'dosage', e.target.value)}
+                                placeholder="e.g., 10mg"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <div className="space-y-2">
+                              <Label htmlFor={`medicine-${index}-frequency`}>Frequency</Label>
+                              <Input
+                                id={`medicine-${index}-frequency`}
+                                value={medicine.frequency}
+                                onChange={(e) => updateMedicine(index, 'frequency', e.target.value)}
+                                placeholder="e.g., Twice daily"
+                              />
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label htmlFor={`medicine-${index}-duration`}>Duration</Label>
+                              <Input
+                                id={`medicine-${index}-duration`}
+                                value={medicine.duration}
+                                onChange={(e) => updateMedicine(index, 'duration', e.target.value)}
+                                placeholder="e.g., 7 days"
+                              />
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label htmlFor={`medicine-${index}-instructions`}>Instructions</Label>
+                              <Input
+                                id={`medicine-${index}-instructions`}
+                                value={medicine.instructions}
+                                onChange={(e) => updateMedicine(index, 'instructions', e.target.value)}
+                                placeholder="e.g., After meals"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="notes">Notes</Label>
+                      <Textarea
+                        id="notes"
+                        value={newPrescription.notes}
+                        onChange={(e) => updatePrescriptionField('notes', e.target.value)}
+                        placeholder="Additional notes for the prescription"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button 
+                      type="button" 
+                      onClick={handleCreatePrescription}
+                      disabled={!newPrescription.patientId || loading}
+                    >
+                      Create Prescription
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="container mx-auto px-4 py-6">
+        <div className="rounded-lg border border-border bg-card">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Diagnosis</TableHead>
+                  <TableHead>Medications</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={index}>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredPrescriptions.length > 0 ? (
+                  filteredPrescriptions.map((prescription) => (
+                    <TableRow key={prescription.id}>
+                      <TableCell>{formatDate(prescription.createdAt)}</TableCell>
+                      <TableCell className="font-medium">{prescription.patientName}</TableCell>
+                      <TableCell className="max-w-[200px] truncate">{prescription.diagnosis || 'Not specified'}</TableCell>
+                      <TableCell className="max-w-[200px] truncate">
+                        {prescription.medicines.length > 0 
+                          ? prescription.medicines.map(med => med.name).join(', ') 
+                          : 'None'
+                        }
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={getBadgeVariant(prescription.status)}
+                        >
+                          {prescription.status.toUpperCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                              <span className="sr-only">Open menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleViewPrescription(prescription.id!)}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditPrescription(prescription.id!)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleShowPDF(prescription)}>
+                              <FileText className="h-4 w-4 mr-2" />
+                              Generate PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteClick(prescription.id!)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      {searchQuery
+                        ? 'No prescriptions matching your search'
+                        : 'No prescriptions yet. Create your first prescription!'
+                      }
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Prescription</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the
+              prescription and remove it from our servers.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* PDF Preview Dialog */}
+      <Dialog open={showPDFPreview} onOpenChange={setShowPDFPreview}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Prescription Preview</DialogTitle>
+            <DialogDescription>
+              Review the prescription PDF before downloading.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="border rounded-lg overflow-auto max-h-[70vh]">
+            {selectedPrescription && settings ? (
+              <PrescriptionPDF 
+                ref={pdfRef} 
+                prescription={selectedPrescription} 
+                settings={settings} 
+              />
+            ) : (
+              <div className="p-8 text-center">
+                <Skeleton className="h-40 w-full mb-4" />
+                <Skeleton className="h-10 w-3/4 mx-auto mb-2" />
+                <Skeleton className="h-10 w-1/2 mx-auto" />
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowPDFPreview(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleDownloadPDF} 
+              disabled={generatingPDF}
+            >
+              {generatingPDF ? 'Generating PDF...' : 'Download PDF'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </DashboardLayout>
+  );
+};
+
+export default Prescriptions; 
