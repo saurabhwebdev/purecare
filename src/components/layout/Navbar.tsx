@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { Menu, X, User, Settings, LogOut, Users, Calendar, FileText, Stethoscope, DollarSign } from 'lucide-react';
+import { Menu, X, User, Settings, LogOut, Users, Calendar, FileText, Stethoscope, DollarSign, Package } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +44,7 @@ const Navbar = () => {
     { to: '/medical-records', label: 'Medical Records' },
     { to: '/prescriptions', label: 'Prescriptions' },
     { to: '/invoices', label: 'Invoices' },
+    { to: '/inventory', label: 'Inventory' },
   ];
 
   // Choose which links to display based on authentication status
@@ -173,7 +174,49 @@ const Navbar = () => {
               className="block px-3 py-2 rounded-md text-base font-medium text-foreground hover:bg-accent"
               onClick={() => setIsMenuOpen(false)}
             >
-              {link.label}
+              {link.label === 'Dashboard' && (
+                <div className="flex items-center">
+                  <Stethoscope className="mr-2 h-4 w-4" />
+                  <span>{link.label}</span>
+                </div>
+              )}
+              {link.label === 'Patients' && (
+                <div className="flex items-center">
+                  <Users className="mr-2 h-4 w-4" />
+                  <span>{link.label}</span>
+                </div>
+              )}
+              {link.label === 'Appointments' && (
+                <div className="flex items-center">
+                  <Calendar className="mr-2 h-4 w-4" />
+                  <span>{link.label}</span>
+                </div>
+              )}
+              {link.label === 'Medical Records' && (
+                <div className="flex items-center">
+                  <FileText className="mr-2 h-4 w-4" />
+                  <span>{link.label}</span>
+                </div>
+              )}
+              {link.label === 'Prescriptions' && (
+                <div className="flex items-center">
+                  <FileText className="mr-2 h-4 w-4" />
+                  <span>{link.label}</span>
+                </div>
+              )}
+              {link.label === 'Invoices' && (
+                <div className="flex items-center">
+                  <DollarSign className="mr-2 h-4 w-4" />
+                  <span>{link.label}</span>
+                </div>
+              )}
+              {link.label === 'Inventory' && (
+                <div className="flex items-center">
+                  <Package className="mr-2 h-4 w-4" />
+                  <span>{link.label}</span>
+                </div>
+              )}
+              {!['Dashboard', 'Patients', 'Appointments', 'Medical Records', 'Prescriptions', 'Invoices', 'Inventory'].includes(link.label) && link.label}
             </Link>
           ))}
           

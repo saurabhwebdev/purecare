@@ -514,7 +514,7 @@ const MedicalRecords = () => {
 
       {/* Medical Record Details Dialog */}
       <Dialog open={!!viewRecordDetails} onOpenChange={(open) => !open && setViewRecordDetails(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Medical Record Details</DialogTitle>
             <DialogDescription>
@@ -523,49 +523,70 @@ const MedicalRecords = () => {
           </DialogHeader>
           {viewRecordDetails && (
             <div className="py-4">
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Patient</h4>
-                  <p>{medicalRecords.find(r => r.id === viewRecordDetails.id)?.patientName}</p>
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium text-muted-foreground">Patient</h4>
+                    <p className="text-sm font-semibold">{medicalRecords.find(r => r.id === viewRecordDetails.id)?.patientName}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium text-muted-foreground">Date</h4>
+                    <p className="text-sm font-semibold flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                      {formatRecordDate(viewRecordDetails.date)}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Date</h4>
-                  <p>{formatRecordDate(viewRecordDetails.date)}</p>
+                
+                <Separator />
+                
+                <div className="space-y-1">
+                  <h4 className="text-sm font-medium text-muted-foreground">Diagnosis</h4>
+                  <p className="text-sm bg-muted/50 p-3 rounded-md border">{viewRecordDetails.diagnosis}</p>
                 </div>
-              </div>
-              
-              <div className="mb-4">
-                <h4 className="text-sm font-semibold text-muted-foreground">Diagnosis</h4>
-                <p>{viewRecordDetails.diagnosis}</p>
-              </div>
-              
-              <div className="mb-4">
-                <h4 className="text-sm font-semibold text-muted-foreground">Treatment</h4>
-                <p className="whitespace-pre-line">{viewRecordDetails.treatment}</p>
-              </div>
-              
-              {viewRecordDetails.prescription && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-semibold text-muted-foreground">Prescription</h4>
-                  <p className="whitespace-pre-line">{viewRecordDetails.prescription}</p>
+                
+                <div className="space-y-1">
+                  <h4 className="text-sm font-medium text-muted-foreground">Treatment</h4>
+                  <p className="text-sm bg-muted/50 p-3 rounded-md border whitespace-pre-line">{viewRecordDetails.treatment}</p>
                 </div>
-              )}
-              
-              {viewRecordDetails.notes && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-semibold text-muted-foreground">Additional Notes</h4>
-                  <p className="whitespace-pre-line">{viewRecordDetails.notes}</p>
+                
+                {viewRecordDetails.prescription && (
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium text-muted-foreground">Prescription</h4>
+                    <p className="text-sm bg-muted/50 p-3 rounded-md border whitespace-pre-line">{viewRecordDetails.prescription}</p>
+                  </div>
+                )}
+                
+                {viewRecordDetails.notes && (
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium text-muted-foreground">Additional Notes</h4>
+                    <p className="text-sm bg-muted/50 p-3 rounded-md border whitespace-pre-line">{viewRecordDetails.notes}</p>
+                  </div>
+                )}
+                
+                <Separator />
+                
+                <div className="space-y-1">
+                  <h4 className="text-sm font-medium text-muted-foreground">Provider</h4>
+                  <p className="text-sm font-semibold">{viewRecordDetails.provider}</p>
                 </div>
-              )}
-              
-              <div>
-                <h4 className="text-sm font-semibold text-muted-foreground">Provider</h4>
-                <p>{viewRecordDetails.provider}</p>
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button onClick={() => setViewRecordDetails(null)}>Close</Button>
+            <Button variant="outline" onClick={() => setViewRecordDetails(null)}>Close</Button>
+            <Button 
+              onClick={() => {
+                setViewRecordDetails(null);
+                toast({
+                  title: "Action unavailable",
+                  description: "Editing medical records is not available yet."
+                });
+              }}
+              disabled={isLoading}
+            >
+              Edit Record
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

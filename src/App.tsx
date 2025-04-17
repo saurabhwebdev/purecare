@@ -19,6 +19,7 @@ import EditPatient from "./pages/EditPatient";
 import Appointments from "./pages/Appointments";
 import MedicalRecords from "./pages/MedicalRecords";
 import NotFound from "./pages/NotFound";
+import Inventory from "./pages/Inventory";
 
 // Prescription Pages
 import Prescriptions from "./pages/Prescriptions";
@@ -106,6 +107,15 @@ const App = () => (
               element={
                 <PrivateRoute>
                   <MedicalRecords />
+                </PrivateRoute>
+              } 
+            />
+            {/* Inventory Route */}
+            <Route 
+              path="/inventory" 
+              element={
+                <PrivateRoute>
+                  <Inventory />
                 </PrivateRoute>
               } 
             />
