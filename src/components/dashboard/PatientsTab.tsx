@@ -37,6 +37,7 @@ import {
   ArrowDownRight,
   Clock,
   Filter,
+  AlertTriangle
 } from 'lucide-react';
 
 // Types
@@ -53,8 +54,69 @@ const PatientsTab: React.FC<PatientsTabProps> = ({ patients, loading, patientIns
     return <PatientsSkeleton />;
   }
 
+  // Filter patients that need attention (inactive or no interaction in last 90 days)
+  const inactivePatients = patients.filter(p => p.status === 'Inactive');
+  
+  // Get patients with no recent activity (assuming createdAt is the last interaction if no other date exists)
+  const ninetyDaysAgo = subDays(new Date(), 90);
+  const noRecentActivityPatients = patients.filter(p => {
+    if (p.status !== 'Active') return false;
+    if (!p.createdAt) return false;
+    const lastInteraction = p.createdAt instanceof Date
+      ? p.createdAt
+      : new Date(p.createdAt as any);
+    return lastInteraction < ninetyDaysAgo;
+  });
+  
+  const patientsNeedingAttention = [...inactivePatients, ...noRecentActivityPatients];
+  const hasAttentionNeeded = patientsNeedingAttention.length > 0;
+
   return (
     <div className="space-y-6">
+      {/* Patients Needing Attention Alert */}
+      {hasAttentionNeeded && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2 text-amber-800">
+              <AlertTriangle className="h-5 w-5" />
+              Patients Needing Attention
+            </CardTitle>
+            <CardDescription className="text-amber-700">
+              {patientsNeedingAttention.length} patient{patientsNeedingAttention.length !== 1 ? 's' : ''} require follow-up
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {patientsNeedingAttention.slice(0, 3).map((patient, index) => (
+                <div key={index} className="flex justify-between items-center p-2 rounded-md bg-white">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-8 w-8">
+                      <div className="flex h-full w-full items-center justify-center bg-muted">
+                        {patient.name ? patient.name.substring(0, 2).toUpperCase() : 'P'}
+                      </div>
+                    </Avatar>
+                    <div>
+                      <div className="font-medium">{patient.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {patient.status === 'Inactive' ? 'Inactive status' : 'No recent activity'}
+                      </div>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={`/patients/${patient.id}`}>View</Link>
+                  </Button>
+                </div>
+              ))}
+              {patientsNeedingAttention.length > 3 && (
+                <Button variant="link" size="sm" asChild className="mt-2">
+                  <Link to="/patients">View {patientsNeedingAttention.length - 3} more</Link>
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>

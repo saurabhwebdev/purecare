@@ -4,6 +4,30 @@
 
 **URL**: https://lovable.dev/projects/26729754-f497-49b7-9db9-cbfa136494de
 
+## Features and Architecture
+
+### Dashboard Components
+
+PureCare's dashboard implements a modular tab-based interface that provides healthcare professionals with comprehensive insights and functionality through the following components:
+
+1. **OverviewTab** - Central hub that displays key metrics and recent activity across all aspects of the practice
+2. **PatientsTab** - Manages patient data with demographic visualizations, growth trends, and alerts for patients requiring attention
+3. **AppointmentsTab** - Tracks appointment scheduling, completion rates, and provides upcoming appointment views
+4. **FinancialTab** - Presents financial metrics, invoice status, and revenue trends for practice management
+5. **ClinicalTab** - Analyzes clinical data including prescriptions and medical records for patient care insights
+
+Each tab is designed as a separate component to enhance code modularity, maintainability, and reusability. This architecture allows for independent development and testing of features while maintaining a consistent user interface.
+
+### Patient Management Features
+
+The PatientsTab component includes:
+
+- Real-time patient statistics (total, active, new patients)
+- Demographic visualization with interactive charts
+- Patient growth trends analysis
+- Patient attention alerts that highlight inactive patients or those requiring follow-up
+- Recent patient listing with quick-access patient profiles
+
 ## How can I edit this code?
 
 There are several ways of editing your application.
@@ -59,6 +83,20 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Firebase (Authentication, Firestore)
+- Recharts for data visualization
+- Lucide React for icons
+- React Router for navigation
+
+## Development Guidelines
+
+When adding new features to the dashboard:
+
+1. Keep components modular and focused on a specific domain
+2. Follow the established design patterns for consistency
+3. Ensure responsive design for all screen sizes
+4. Include appropriate error handling and loading states
+5. Use TypeScript interfaces to ensure type safety
 
 ## How can I deploy this project?
 
