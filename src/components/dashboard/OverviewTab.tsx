@@ -28,6 +28,20 @@ import {
   DollarSign,
   ArrowUpRight,
   ArrowDownRight,
+  BarChart2,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  AlertCircle,
+  FilePlus,
+  Stethoscope,
+  Clipboard,
+  UserPlus,
+  PlusCircle,
+  FileCheck,
+  CircleDollarSign,
+  CreditCard,
+  Activity
 } from 'lucide-react';
 
 // Types
@@ -91,6 +105,136 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
     }
   };
 
+  // Get activity icon and color based on type and status
+  const getActivityIcon = (type: string, status?: string) => {
+    if (type === 'appointment') {
+      switch (status) {
+        case 'Scheduled':
+          return { icon: <Calendar className="h-4 w-4" />, bgColor: 'bg-blue-100', textColor: 'text-blue-700' };
+        case 'Completed':
+          return { icon: <CheckCircle2 className="h-4 w-4" />, bgColor: 'bg-green-100', textColor: 'text-green-700' };
+        case 'Cancelled':
+          return { icon: <XCircle className="h-4 w-4" />, bgColor: 'bg-red-100', textColor: 'text-red-700' };
+        case 'No-Show':
+          return { icon: <AlertCircle className="h-4 w-4" />, bgColor: 'bg-amber-100', textColor: 'text-amber-700' };
+        default:
+          return { icon: <Clock className="h-4 w-4" />, bgColor: 'bg-gray-100', textColor: 'text-gray-700' };
+      }
+    } else if (type === 'prescription') {
+      return { icon: <FilePlus className="h-4 w-4" />, bgColor: 'bg-indigo-100', textColor: 'text-indigo-700' };
+    } else if (type === 'invoice') {
+      switch (status) {
+        case 'paid':
+          return { icon: <CircleDollarSign className="h-4 w-4" />, bgColor: 'bg-green-100', textColor: 'text-green-700' };
+        case 'overdue':
+          return { icon: <AlertCircle className="h-4 w-4" />, bgColor: 'bg-red-100', textColor: 'text-red-700' };
+        default:
+          return { icon: <CreditCard className="h-4 w-4" />, bgColor: 'bg-orange-100', textColor: 'text-orange-700' };
+      }
+    } else if (type === 'medicalRecord') {
+      return { icon: <Clipboard className="h-4 w-4" />, bgColor: 'bg-purple-100', textColor: 'text-purple-700' };
+    } else if (type === 'patient') {
+      return { icon: <UserPlus className="h-4 w-4" />, bgColor: 'bg-teal-100', textColor: 'text-teal-700' };
+    } else {
+      return { icon: <Activity className="h-4 w-4" />, bgColor: 'bg-primary/10', textColor: 'text-primary' };
+    }
+  };
+
+  // Format activity description
+  const getActivityDescription = (type: string, data: any, status?: string) => {
+    if (type === 'appointment') {
+      switch (status) {
+        case 'Scheduled':
+          return `Appointment scheduled with ${data.patientName}`;
+        case 'Completed':
+          return `Completed appointment with ${data.patientName}`;
+        case 'Cancelled':
+          return `Cancelled appointment with ${data.patientName}`;
+        case 'No-Show':
+          return `No-show for appointment with ${data.patientName}`;
+        default:
+          return `Appointment with ${data.patientName}`;
+      }
+    } else if (type === 'prescription') {
+      return `Prescription created for ${data.patientName}`;
+    } else if (type === 'invoice') {
+      switch (status) {
+        case 'paid':
+          return `Invoice #${data.invoiceNumber} paid (${formatCurrency(data.total)})`;
+        case 'overdue':
+          return `Invoice #${data.invoiceNumber} is overdue (${formatCurrency(data.total)})`;
+        default:
+          return `Invoice #${data.invoiceNumber} created (${formatCurrency(data.total)})`;
+      }
+    } else if (type === 'medicalRecord') {
+      return `Medical record updated for ${data.patientName}`;
+    } else if (type === 'patient') {
+      return `New patient registered: ${data.firstName} ${data.lastName}`;
+    } else {
+      return "Activity logged";
+    }
+  };
+
+  // Combine different activities and sort by date
+  const getRecentActivities = () => {
+    const activities = [];
+
+    // Add appointment activities
+    appointments
+      .filter(a => parseISO(a.date) >= subDays(new Date(), 14))
+      .forEach(appointment => {
+        activities.push({
+          type: 'appointment',
+          data: appointment,
+          status: appointment.status,
+          date: parseISO(appointment.date),
+          time: appointment.time
+        });
+      });
+
+    // Add prescription activities (if they have createdAt date)
+    prescriptions
+      .filter(p => p.createdAt && new Date(p.createdAt as any) >= subDays(new Date(), 14))
+      .forEach(prescription => {
+        activities.push({
+          type: 'prescription',
+          data: prescription,
+          date: new Date(prescription.createdAt as any),
+          time: format(new Date(prescription.createdAt as any), 'HH:mm')
+        });
+      });
+
+    // Add invoice activities (if they have createdAt date)
+    invoices
+      .filter(i => i.createdAt && new Date(i.createdAt as any) >= subDays(new Date(), 14))
+      .forEach(invoice => {
+        activities.push({
+          type: 'invoice',
+          data: invoice,
+          status: invoice.status,
+          date: new Date(invoice.createdAt as any),
+          time: format(new Date(invoice.createdAt as any), 'HH:mm')
+        });
+      });
+
+    // Add new patients (registered in the last 14 days)
+    patients
+      .filter(p => p.createdAt && new Date(p.createdAt as any) >= subDays(new Date(), 14))
+      .forEach(patient => {
+        activities.push({
+          type: 'patient',
+          data: patient,
+          date: new Date(patient.createdAt as any),
+          time: format(new Date(patient.createdAt as any), 'HH:mm')
+        });
+      });
+
+    // Sort activities by date (newest first)
+    return activities.sort((a, b) => b.date.getTime() - a.date.getTime());
+  };
+
+  const recentActivities = getRecentActivities();
+
   return (
     <div className="space-y-6">
       {/* Recent Activity & Insights Row */}
@@ -102,34 +246,59 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
             <CardDescription>Latest updates from your practice</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Recent Appointments */}
-            {appointments.length > 0 ? (
-              appointments
-                .filter(a => parseISO(a.date) >= subDays(new Date(), 7))
-                .sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime())
-                .slice(0, 5)
-                .map((appointment, i) => (
+            {recentActivities.length > 0 ? (
+              recentActivities.slice(0, 7).map((activity, i) => {
+                const { icon, bgColor, textColor } = getActivityIcon(activity.type, activity.status);
+                const description = getActivityDescription(activity.type, activity.data, activity.status);
+                
+                return (
                   <div key={i} className="flex items-start gap-3 pb-3 border-b last:border-b-0">
-                    <div className="bg-primary/10 text-primary rounded-full p-2 mt-1">
-                      <Calendar className="h-4 w-4" />
+                    <div className={`${bgColor} ${textColor} rounded-full p-2 mt-1`}>
+                      {icon}
                     </div>
-                    <div>
-                      <p className="font-medium text-sm">{appointment.patientName}</p>
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{description}</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(parseISO(appointment.date), 'MMM dd')} at {appointment.time}
+                        {format(activity.date, 'MMM dd')} at {activity.time}
                       </p>
-                      <div className="mt-1">
-                        {getStatusBadge(appointment.status)}
-                      </div>
+                      {activity.status && activity.type === 'appointment' && (
+                        <div className="mt-1">
+                          {getStatusBadge(activity.status)}
+                        </div>
+                      )}
+                      {activity.type === 'invoice' && activity.status && (
+                        <div className="mt-1">
+                          <Badge 
+                            variant="outline" 
+                            className={
+                              activity.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' :
+                              activity.status === 'overdue' ? 'bg-red-50 text-red-700 border-red-200' :
+                              'bg-orange-50 text-orange-700 border-orange-200'
+                            }
+                          >
+                            {activity.status.charAt(0).toUpperCase() + activity.status.slice(1)}
+                          </Badge>
+                        </div>
+                      )}
                     </div>
                   </div>
-                ))
+                );
+              })
             ) : (
               <div className="text-center py-4 text-muted-foreground text-sm">
-                No recent appointments found
+                No recent activity found
               </div>
             )}
           </CardContent>
+          {recentActivities.length > 7 && (
+            <CardFooter className="pt-0">
+              <div className="text-center w-full">
+                <p className="text-xs text-muted-foreground">
+                  + {recentActivities.length - 7} more activities
+                </p>
+              </div>
+            </CardFooter>
+          )}
         </Card>
 
         {/* Appointment Trends Column */}

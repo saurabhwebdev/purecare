@@ -96,14 +96,12 @@ const Prescriptions = () => {
   // New state for prescription creation
   const [isAddPrescriptionOpen, setIsAddPrescriptionOpen] = useState(false);
   const [patients, setPatients] = useState<any[]>([]);
-  const [newPrescription, setNewPrescription] = useState<Partial<Prescription>>({
+  const [newPrescription, setNewPrescription] = useState({
     patientId: '',
     patientName: '',
-    doctorId: '',
-    doctorName: '',
     diagnosis: '',
     notes: '',
-    status: 'active',
+    status: 'active' as const,
     medicines: [{ name: '', dosage: '', frequency: '', duration: '', instructions: '' }]
   });
   
@@ -112,7 +110,12 @@ const Prescriptions = () => {
   // Fetch prescriptions and patients from Firestore
   useEffect(() => {
     const fetchData = async () => {
-      if (!user) return;
+      if (!user) {
+        console.log("No user found, can't fetch prescriptions");
+        return;
+      }
+      
+      console.log("Fetching prescriptions for user:", user.uid); // Debug user ID
       
       try {
         setLoading(true);
@@ -121,6 +124,7 @@ const Prescriptions = () => {
           getPatients(user.uid)
         ]);
         
+        console.log('Fetched prescriptions:', prescriptionData); // Debug log
         setPrescriptions(prescriptionData);
         setFilteredPrescriptions(prescriptionData);
         setPatients(patientData);
@@ -331,18 +335,25 @@ const Prescriptions = () => {
     try {
       setLoading(true);
       
-      // Add user ID and doctor name
-      const prescriptionWithUserId = {
-        ...newPrescription,
-        doctorId: user.uid,
-        doctorName: user.displayName || 'Doctor'
+      // Prepare prescription data without doctorId since it will be added by the function
+      const prescriptionData = {
+        patientId: newPrescription.patientId,
+        patientName: newPrescription.patientName,
+        diagnosis: newPrescription.diagnosis || '',
+        notes: newPrescription.notes || '',
+        status: newPrescription.status as 'active' | 'completed' | 'cancelled',
+        medicines: newPrescription.medicines || []
       };
       
-      // Create prescription
-      await createPrescription(prescriptionWithUserId as Omit<Prescription, 'id'>);
+      console.log('Creating prescription with data:', prescriptionData); // Debug log
+      console.log('User ID:', user.uid); // Debug log
+      
+      // Create prescription - pass doctorId as first parameter
+      await createPrescription(user.uid, prescriptionData);
       
       // Refresh prescriptions
       const updatedPrescriptions = await getAllPrescriptions(user.uid);
+      console.log('Updated prescriptions after creation:', updatedPrescriptions); // Debug log
       setPrescriptions(updatedPrescriptions);
       setFilteredPrescriptions(updatedPrescriptions);
       
@@ -355,11 +366,9 @@ const Prescriptions = () => {
       setNewPrescription({
         patientId: '',
         patientName: '',
-        doctorId: '',
-        doctorName: '',
         diagnosis: '',
         notes: '',
-        status: 'active',
+        status: 'active' as const,
         medicines: [{ name: '', dosage: '', frequency: '', duration: '', instructions: '' }]
       });
       setIsAddPrescriptionOpen(false);
@@ -589,15 +598,24 @@ const Prescriptions = () => {
                       <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                     </TableRow>
                   ))
-                ) : filteredPrescriptions.length > 0 ? (
+                ) : filteredPrescriptions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      {searchQuery
+                        ? 'No prescriptions matching your search'
+                        : 'No prescriptions yet. Create your first prescription!'
+                      }
+                    </TableCell>
+                  </TableRow>
+                ) : (
                   filteredPrescriptions.map((prescription) => (
                     <TableRow key={prescription.id}>
                       <TableCell>{formatDate(prescription.createdAt)}</TableCell>
                       <TableCell className="font-medium">{prescription.patientName}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{prescription.diagnosis || 'Not specified'}</TableCell>
                       <TableCell className="max-w-[200px] truncate">
-                        {prescription.medicines.length > 0 
-                          ? prescription.medicines.map(med => med.name).join(', ') 
+                        {prescription.medicines && prescription.medicines.length > 0 
+                          ? prescription.medicines.map(med => med.name || 'Unnamed medication').join(', ') 
                           : 'None'
                         }
                       </TableCell>
@@ -605,7 +623,7 @@ const Prescriptions = () => {
                         <Badge
                           variant={getBadgeVariant(prescription.status)}
                         >
-                          {prescription.status.toUpperCase()}
+                          {prescription.status ? prescription.status.toUpperCase() : 'UNKNOWN'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -644,15 +662,6 @@ const Prescriptions = () => {
                       </TableCell>
                     </TableRow>
                   ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      {searchQuery
-                        ? 'No prescriptions matching your search'
-                        : 'No prescriptions yet. Create your first prescription!'
-                      }
-                    </TableCell>
-                  </TableRow>
                 )}
               </TableBody>
             </Table>

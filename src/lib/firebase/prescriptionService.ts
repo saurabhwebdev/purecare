@@ -52,6 +52,7 @@ export interface Prescription {
  */
 export const getAllPrescriptions = async (userId: string) => {
   try {
+    console.log("Querying prescriptions with doctorId:", userId);
     const prescriptionsRef = collection(db, 'prescriptions');
     const q = query(
       prescriptionsRef,
@@ -60,10 +61,12 @@ export const getAllPrescriptions = async (userId: string) => {
     );
 
     const querySnapshot = await getDocs(q);
+    console.log("Raw prescription query result size:", querySnapshot.size);
     const prescriptions: Prescription[] = [];
 
     querySnapshot.forEach((doc) => {
       const data = doc.data() as Omit<Prescription, 'id'>;
+      console.log("Found prescription doc:", doc.id, data);
       prescriptions.push({
         id: doc.id,
         ...data,
@@ -139,8 +142,10 @@ export const getPrescription = async (prescriptionId: string) => {
  * @param doctorId The doctor's ID
  * @param prescription The prescription data
  */
-export const createPrescription = async (doctorId: string, prescription: Omit<Prescription, 'id' | 'createdAt' | 'updatedAt' | 'clinicInfo'>) => {
+export const createPrescription = async (doctorId: string, prescription: Omit<Prescription, 'id' | 'createdAt' | 'updatedAt' | 'clinicInfo' | 'doctorId'>) => {
   try {
+    console.log("Creating prescription for doctorId:", doctorId);
+    console.log("Input prescription data:", prescription);
     // Get clinic settings for the prescription
     const settings = await getUserSettings(doctorId);
     
@@ -161,7 +166,9 @@ export const createPrescription = async (doctorId: string, prescription: Omit<Pr
       clinicInfo,
     };
 
+    console.log("Final prescription data to save:", prescriptionWithTimestamp);
     const docRef = await addDoc(collection(db, 'prescriptions'), prescriptionWithTimestamp);
+    console.log("Successfully added prescription with ID:", docRef.id);
     
     return {
       id: docRef.id,
