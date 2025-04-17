@@ -23,6 +23,10 @@ import {
   Loader 
 } from 'lucide-react';
 
+// Bangalore coordinates for the map
+const BLR_LAT = 12.9716;
+const BLR_LON = 77.5946;
+
 const Contact = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -123,8 +127,8 @@ const Contact = () => {
                       <div>
                         <h3 className="font-medium">Address</h3>
                         <p className="text-sm text-muted-foreground">
-                          123 Healthcare Ave, Suite 101<br />
-                          Medical District, CA 90210
+                          123 MG Road, Indiranagar<br />
+                          Bangalore, Karnataka 560038, India
                         </p>
                       </div>
                     </div>
@@ -134,7 +138,7 @@ const Contact = () => {
                       <div>
                         <h3 className="font-medium">Phone</h3>
                         <p className="text-sm text-muted-foreground">
-                          +1 (555) 123-4567
+                          +91 (80) 4567-8901
                         </p>
                       </div>
                     </div>
@@ -252,12 +256,30 @@ const Contact = () => {
           </div>
         </div>
         
-        {/* Google Maps or alternative map integration could go here */}
-        <div className="mt-16 h-96 w-full rounded-lg border border-border bg-card/50 flex items-center justify-center">
-          <p className="text-muted-foreground text-center">
-            Map integration would be displayed here.<br />
-            (Google Maps or similar service)
-          </p>
+        {/* Map Integration using OpenStreetMap */}
+        <div className="mt-16 w-full h-96 rounded-lg border border-border overflow-hidden bg-white">
+          <iframe 
+            width="100%" 
+            height="100%" 
+            frameBorder="0" 
+            scrolling="no" 
+            marginHeight={0} 
+            marginWidth={0} 
+            src={`https://www.openstreetmap.org/export/embed.html?bbox=${BLR_LON - 0.01}%2C${BLR_LAT - 0.01}%2C${BLR_LON + 0.01}%2C${BLR_LAT + 0.01}&amp;layer=mapnik&amp;marker=${BLR_LAT}%2C${BLR_LON}`}
+            style={{ border: 0 }}
+            title="PureCare Office Location in Bangalore"
+            aria-label="Map showing PureCare office location in Bangalore"
+          ></iframe>
+          <div className="p-2 text-center text-sm">
+            <a 
+              href={`https://www.openstreetmap.org/?mlat=${BLR_LAT}&amp;mlon=${BLR_LON}#map=15/${BLR_LAT}/${BLR_LON}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              View Larger Map
+            </a>
+          </div>
         </div>
       </div>
     </MainLayout>
