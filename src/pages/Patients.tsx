@@ -328,22 +328,12 @@ const Patients = () => {
 
   // Handle viewing patient details
   const handleViewPatient = (id: string) => {
-    // This would navigate to a dedicated patient view page
-    // For now we'll just show a toast
-    toast({
-      title: 'View Patient',
-      description: 'This would navigate to a patient details page.',
-    });
+    navigate(`/patients/${id}`);
   };
 
   // Handle editing a patient
   const handleEditPatient = (id: string) => {
-    // This would navigate to a dedicated patient edit page
-    // For now we'll just show a toast
-    toast({
-      title: 'Edit Patient',
-      description: 'This would navigate to a patient editing page.',
-    });
+    navigate(`/patients/${id}/edit`);
   };
 
   // Handle scheduling an appointment

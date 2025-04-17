@@ -14,6 +14,8 @@ import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Patients from "./pages/Patients";
+import PatientDetail from "./pages/PatientDetail";
+import EditPatient from "./pages/EditPatient";
 import Appointments from "./pages/Appointments";
 import MedicalRecords from "./pages/MedicalRecords";
 import NotFound from "./pages/NotFound";
@@ -72,6 +74,22 @@ const App = () => (
               element={
                 <PrivateRoute>
                   <Patients />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/patients/:id" 
+              element={
+                <PrivateRoute>
+                  <PatientDetail />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/patients/:id/edit" 
+              element={
+                <PrivateRoute>
+                  <EditPatient />
                 </PrivateRoute>
               } 
             />
