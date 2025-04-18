@@ -47,6 +47,10 @@ import Roadmap from "./pages/Roadmap";
 import About from "./pages/About";
 import Careers from "./pages/Careers";
 
+// Documentation article imports
+import PatientManagementDoc from "./pages/docs/patient-management/PatientManagement";
+import AppointmentsManagementDoc from "./pages/docs/appointments/AppointmentsManagement";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -253,6 +257,25 @@ const App = () => (
                 </PrivateRoute>
               } 
             />
+            
+            {/* Documentation Article Routes */}
+            <Route 
+              path="/docs/patient-management/PatientManagement" 
+              element={
+                <PrivateRoute>
+                  <PatientManagementDoc />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/docs/appointments/AppointmentsManagement" 
+              element={
+                <PrivateRoute>
+                  <AppointmentsManagementDoc />
+                </PrivateRoute>
+              } 
+            />
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

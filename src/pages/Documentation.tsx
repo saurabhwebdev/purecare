@@ -56,9 +56,24 @@ const DocumentationPage = () => {
 
   // For future implementation: recently viewed articles
   const recentArticles = [
-    { id: 'setup-google', title: 'Setting up Google Calendar' },
-    { id: 'manage-appointments', title: 'Managing Appointments' },
-    { id: 'patient-intake', title: 'Patient Intake Process' },
+    { 
+      id: 'patient-management', 
+      title: 'Patient Management Guide',
+      path: '/docs/patient-management/PatientManagement',
+      available: true
+    },
+    { 
+      id: 'appointments', 
+      title: 'Managing Appointments',
+      path: '/docs/appointments/AppointmentsManagement',
+      available: true
+    },
+    { 
+      id: 'google-calendar', 
+      title: 'Google Calendar Integration',
+      path: '/docs/google-calendar/GoogleCalendarSetup',
+      available: false
+    },
   ];
 
   return (
@@ -104,9 +119,33 @@ const DocumentationPage = () => {
                       </div>
                     </CardHeader>
                     <CardContent className="pt-4">
-                      <p className="text-sm text-muted-foreground">
-                        This section is currently empty. Documentation will be added soon.
-                      </p>
+                      {category.id === 'patient-management' ? (
+                        <ul className="space-y-1">
+                          <li>
+                            <Link to="/docs/patient-management/PatientManagement" className="text-sm text-primary hover:underline">
+                              Patient Management Guide
+                            </Link>
+                          </li>
+                          <li className="text-xs text-muted-foreground">
+                            Learn how to effectively manage patient records
+                          </li>
+                        </ul>
+                      ) : category.id === 'appointments' ? (
+                        <ul className="space-y-1">
+                          <li>
+                            <Link to="/docs/appointments/AppointmentsManagement" className="text-sm text-primary hover:underline">
+                              Appointments Management Guide
+                            </Link>
+                          </li>
+                          <li className="text-xs text-muted-foreground">
+                            Learn how to schedule and manage appointments
+                          </li>
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          This section is currently empty. Documentation will be added soon.
+                        </p>
+                      )}
                     </CardContent>
                     <CardFooter className="flex justify-end border-t bg-muted/20 p-2">
                       <Button variant="ghost" size="sm" asChild>
@@ -133,12 +172,20 @@ const DocumentationPage = () => {
                         <TableRow key={article.id}>
                           <TableCell className="flex items-center gap-2">
                             <BookMarked className="h-4 w-4 text-muted-foreground" />
-                            <Link to={`/docs/article/${article.id}`} className="hover:underline text-primary">
-                              {article.title}
-                            </Link>
+                            {article.available ? (
+                              <Link to={article.path} className="hover:underline text-primary">
+                                {article.title}
+                              </Link>
+                            ) : (
+                              <span className="text-muted-foreground">{article.title}</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Badge variant="outline" className="bg-muted text-muted-foreground">Coming soon</Badge>
+                            {article.available ? (
+                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Available</Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-muted text-muted-foreground">Coming soon</Badge>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
