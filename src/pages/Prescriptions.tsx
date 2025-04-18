@@ -16,7 +16,8 @@ import {
   getAllPrescriptions, 
   deletePrescription, 
   getPrescriptionWithSettings,
-  createPrescription
+  createPrescription,
+  Medicine
 } from '@/lib/firebase/prescriptionService';
 import {
   Dialog,
@@ -77,6 +78,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import AISymptomsSuggestion from '@/components/prescription/AISymptomsSuggestion';
 
 const Prescriptions = () => {
   const navigate = useNavigate();
@@ -384,6 +386,19 @@ const Prescriptions = () => {
     }
   };
 
+  // Update the function to handle adding a medication from AI suggestions
+  const handleAddMedicineFromAI = (medicine: { name: string; dosage: string; frequency: string; duration: string; instructions: string }) => {
+    setNewPrescription(prev => {
+      const medicines = [...(prev.medicines || []), medicine];
+      return { ...prev, medicines };
+    });
+    
+    toast({
+      title: 'Medicine Added',
+      description: `${medicine.name} has been added to the prescription.`,
+    });
+  };
+
   return (
     <DashboardLayout>
       <div className="w-full backdrop-blur-md bg-background/80 py-4 border-b border-border sticky top-0 z-10">
@@ -471,6 +486,9 @@ const Prescriptions = () => {
                           Add Medication
                         </Button>
                       </div>
+                      
+                      {/* AI Symptoms Suggestion Component */}
+                      <AISymptomsSuggestion onMedicineAdd={handleAddMedicineFromAI} />
                       
                       {newPrescription.medicines?.map((medicine, index) => (
                         <div key={index} className="space-y-4 border rounded-lg p-4 relative">

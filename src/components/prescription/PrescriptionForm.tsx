@@ -25,6 +25,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Plus, X, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import AISymptomsSuggestion from './AISymptomsSuggestion';
 
 // Option for medicine frequency
 const frequencyOptions = [
@@ -114,6 +115,15 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({
       [field]: value,
     };
     setMedicines(updatedMedicines);
+  };
+
+  // Handle adding a medicine from AI suggestions
+  const handleAddMedicineFromAI = (medicine: Medicine) => {
+    setMedicines([...medicines, medicine]);
+    toast({
+      title: 'Medicine Added',
+      description: `${medicine.name} has been added to the prescription.`,
+    });
   };
 
   // Validate the form
@@ -288,7 +298,7 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({
           <CardHeader>
             <CardTitle>Medications</CardTitle>
             <CardDescription>
-              Add medications to the prescription
+              Add medications to the prescription or use AI to suggest medications based on symptoms
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -300,101 +310,107 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({
               </Alert>
             )}
 
-            {medicines.map((medicine, index) => (
-              <div key={index} className="relative border rounded-lg p-4">
-                {medicines.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute top-2 right-2"
-                    onClick={() => handleRemoveMedicine(index)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+            {/* AI Symptoms Suggestion Component */}
+            <AISymptomsSuggestion onMedicineAdd={handleAddMedicineFromAI} />
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor={`medicine-name-${index}`}>Medicine Name</Label>
-                    <Input
-                      id={`medicine-name-${index}`}
-                      placeholder="Medicine name"
-                      value={medicine.name}
-                      onChange={(e) => handleMedicineChange(index, 'name', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor={`medicine-dosage-${index}`}>Dosage</Label>
-                    <Input
-                      id={`medicine-dosage-${index}`}
-                      placeholder="e.g., 500mg, 5ml"
-                      value={medicine.dosage}
-                      onChange={(e) => handleMedicineChange(index, 'dosage', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor={`medicine-frequency-${index}`}>Frequency</Label>
-                    <Select
-                      value={medicine.frequency}
-                      onValueChange={(value) => handleMedicineChange(index, 'frequency', value)}
+            <div className="mt-6">
+              <h3 className="text-lg font-medium mb-4">Medications List</h3>
+              {medicines.map((medicine, index) => (
+                <div key={index} className="relative border rounded-lg p-4 mb-4">
+                  {medicines.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-2 right-2"
+                      onClick={() => handleRemoveMedicine(index)}
                     >
-                      <SelectTrigger id={`medicine-frequency-${index}`}>
-                        <SelectValue placeholder="Select frequency" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {frequencyOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor={`medicine-duration-${index}`}>Duration</Label>
-                    <Select
-                      value={medicine.duration}
-                      onValueChange={(value) => handleMedicineChange(index, 'duration', value)}
-                    >
-                      <SelectTrigger id={`medicine-duration-${index}`}>
-                        <SelectValue placeholder="Select duration" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {durationOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor={`medicine-name-${index}`}>Medicine Name</Label>
+                      <Input
+                        id={`medicine-name-${index}`}
+                        placeholder="Medicine name"
+                        value={medicine.name}
+                        onChange={(e) => handleMedicineChange(index, 'name', e.target.value)}
+                      />
+                    </div>
 
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor={`medicine-instructions-${index}`}>Special Instructions</Label>
-                    <Textarea
-                      id={`medicine-instructions-${index}`}
-                      placeholder="Special instructions for this medication (optional)"
-                      value={medicine.instructions}
-                      onChange={(e) => handleMedicineChange(index, 'instructions', e.target.value)}
-                    />
+                    <div className="space-y-2">
+                      <Label htmlFor={`medicine-dosage-${index}`}>Dosage</Label>
+                      <Input
+                        id={`medicine-dosage-${index}`}
+                        placeholder="e.g., 500mg, 5ml"
+                        value={medicine.dosage}
+                        onChange={(e) => handleMedicineChange(index, 'dosage', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor={`medicine-frequency-${index}`}>Frequency</Label>
+                      <Select
+                        value={medicine.frequency}
+                        onValueChange={(value) => handleMedicineChange(index, 'frequency', value)}
+                      >
+                        <SelectTrigger id={`medicine-frequency-${index}`}>
+                          <SelectValue placeholder="Select frequency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {frequencyOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor={`medicine-duration-${index}`}>Duration</Label>
+                      <Select
+                        value={medicine.duration}
+                        onValueChange={(value) => handleMedicineChange(index, 'duration', value)}
+                      >
+                        <SelectTrigger id={`medicine-duration-${index}`}>
+                          <SelectValue placeholder="Select duration" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {durationOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor={`medicine-instructions-${index}`}>Special Instructions</Label>
+                      <Textarea
+                        id={`medicine-instructions-${index}`}
+                        placeholder="Special instructions for this medication (optional)"
+                        value={medicine.instructions}
+                        onChange={(e) => handleMedicineChange(index, 'instructions', e.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
 
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full flex items-center justify-center gap-2"
-              onClick={handleAddMedicine}
-            >
-              <Plus className="h-4 w-4" />
-              Add Medicine
-            </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full flex items-center justify-center gap-2"
+                onClick={handleAddMedicine}
+              >
+                <Plus className="h-4 w-4" />
+                Add Medicine Manually
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
