@@ -40,6 +40,8 @@ import Privacy from "./pages/Privacy";
 import Pricing from "./pages/Pricing";
 import Features from "./pages/Features";
 import Roadmap from "./pages/Roadmap";
+import About from "./pages/About";
+import Careers from "./pages/Careers";
 
 const queryClient = new QueryClient();
 
@@ -62,6 +64,8 @@ const App = () => (
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/features" element={<Features />} />
             <Route path="/roadmap" element={<Roadmap />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/careers" element={<Careers />} />
             
             <Route 
               path="/dashboard" 
