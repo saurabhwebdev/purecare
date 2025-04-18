@@ -21,7 +21,7 @@ const About = () => {
               <div className="flex flex-col md:flex-row gap-8 items-center">
                 <div className="md:w-1/3 flex items-center justify-center mb-6 md:mb-0">
                   <div className="rounded-full bg-primary/10 p-6">
-                    <Heart className="w-16 h-16 text-primary" />
+                    <Heart className="w-16 h-16 text-primary rainbow-heart" fill="currentColor" />
                   </div>
                 </div>
                 
