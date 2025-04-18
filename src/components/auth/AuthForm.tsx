@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,6 +12,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Separator } from '@/components/ui/separator';
@@ -25,7 +26,8 @@ import {
   Database, 
   Layers, 
   Lock, 
-  Loader2 
+  Loader2,
+  Gift
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -40,6 +42,7 @@ const signUpSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
   confirmPassword: z.string(),
+  referralCode: z.string().optional(),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -50,9 +53,10 @@ type SignUpFormValues = z.infer<typeof signUpSchema>;
 
 interface AuthFormProps {
   type: 'signin' | 'signup';
+  referralCode?: string | null;
 }
 
-const AuthForm: React.FC<AuthFormProps> = ({ type }) => {
+const AuthForm: React.FC<AuthFormProps> = ({ type, referralCode }) => {
   const { signIn, signUp, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
@@ -61,6 +65,9 @@ const AuthForm: React.FC<AuthFormProps> = ({ type }) => {
   const [showCreationOverlay, setShowCreationOverlay] = useState(false);
   const [creationStep, setCreationStep] = useState(0);
   const [creationComplete, setCreationComplete] = useState(false);
+  const [manualReferralCode, setManualReferralCode] = useState<string>('');
+  const [googleReferralCode, setGoogleReferralCode] = useState<string>('');
+  const [showGoogleReferralInput, setShowGoogleReferralInput] = useState(false);
 
   // Account creation steps with messages and icons
   const creationSteps = [
@@ -87,8 +94,25 @@ const AuthForm: React.FC<AuthFormProps> = ({ type }) => {
       email: '',
       password: '',
       confirmPassword: '',
+      referralCode: referralCode || '',
     },
   });
+
+  // Set the manual referral code from props if provided
+  useEffect(() => {
+    if (referralCode) {
+      setManualReferralCode(referralCode);
+    }
+  }, [referralCode]);
+
+  // Show Google referral input when in signup mode and no referral code from URL
+  useEffect(() => {
+    if (type === 'signup' && !referralCode) {
+      setShowGoogleReferralInput(true);
+    } else {
+      setShowGoogleReferralInput(false);
+    }
+  }, [type, referralCode]);
 
   const onSignInSubmit = async (data: SignInFormValues) => {
     try {
@@ -118,7 +142,21 @@ const AuthForm: React.FC<AuthFormProps> = ({ type }) => {
       
       // Actually create the account after showing all steps
       try {
-        await signUp(data.email, data.password, data.name);
+        const userCredential = await signUp(data.email, data.password, data.name);
+        
+        // Process referral if available - either from URL or manually entered
+        const codeToUse = data.referralCode || manualReferralCode;
+        if (codeToUse && userCredential.user) {
+          try {
+            // Import here to avoid circular dependencies
+            const { processReferral } = await import('@/lib/firebase/referralService');
+            await processReferral(userCredential.user.uid, codeToUse);
+          } catch (referralError) {
+            console.error("Error processing referral:", referralError);
+            // Continue even if referral processing fails
+          }
+        }
+        
         setTimeout(() => {
           navigate('/dashboard');
         }, 1000); // Small additional delay for better UX
@@ -148,10 +186,32 @@ const AuthForm: React.FC<AuthFormProps> = ({ type }) => {
         
         setCreationComplete(true);
         
-        // Small delay before redirecting
+        // Small delay before signing in
         await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Now sign in with Google
+        const userCredential = await signInWithGoogle();
+        
+        // Process referral for Google sign-up if available
+        // Priority: 1. URL referral code, 2. Manual Google referral code, 3. Manual email referral code
+        const codeToUse = referralCode || googleReferralCode || manualReferralCode;
+        
+        if (codeToUse && userCredential.user) {
+          try {
+            // Import here to avoid circular dependencies
+            const { processReferral } = await import('@/lib/firebase/referralService');
+            await processReferral(userCredential.user.uid, codeToUse);
+          } catch (referralError) {
+            console.error("Error processing referral:", referralError);
+            // Continue even if referral processing fails
+          }
+        }
+        
+        navigate('/dashboard');
+        return;
       }
       
+      // Regular Google sign-in for returning users
       await signInWithGoogle();
       navigate('/dashboard');
     } catch (error) {
@@ -163,7 +223,24 @@ const AuthForm: React.FC<AuthFormProps> = ({ type }) => {
   };
 
   const GoogleSignInButton = () => (
-    <div className="py-8 text-center">
+    <div className="py-6 text-center">
+      {/* Show referral code input for Google signup if needed */}
+      {showGoogleReferralInput && (
+        <div className="mb-4">
+          <div className="flex items-center mb-2">
+            <Gift className="h-4 w-4 mr-2 text-primary" />
+            <Label className="text-sm font-medium text-left">Referral Code (Optional)</Label>
+          </div>
+          <Input 
+            placeholder="Enter referral code if you have one"
+            value={googleReferralCode}
+            onChange={(e) => setGoogleReferralCode(e.target.value)}
+            className="mb-4"
+          />
+          <p className="text-xs text-muted-foreground text-left mb-4">Enter a referral code to get bonus AI suggestions every month.</p>
+        </div>
+      )}
+    
       <div className="flex justify-center mb-4">
         <div className="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center">
           <svg xmlns="http://www.w3.org/2000/svg" height="32" viewBox="0 0 24 24" width="32">
@@ -318,6 +395,21 @@ const AuthForm: React.FC<AuthFormProps> = ({ type }) => {
                 </FormItem>
               )}
             />
+            {!referralCode && (
+              <FormField
+                control={signUpForm.control}
+                name="referralCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Referral Code (Optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter referral code if you have one" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (
                 <div className="flex items-center">

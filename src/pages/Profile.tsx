@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { updateProfile as updateFirebaseProfile } from 'firebase/auth';
@@ -8,13 +8,24 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Gift, Copy, Share, Users, Award, UserPlus } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { FREE_MONTHLY_SUGGESTIONS, REFERRAL_REWARD, getUserReferralInfo, getUserUsage } from '@/lib/firebase/referralService';
 
 const Profile = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [referralInfo, setReferralInfo] = useState({
+    referralCode: '',
+    referralLink: '',
+    referralCount: 0,
+    referredUsers: [] as string[]
+  });
+  const [referralBonus, setReferralBonus] = useState(0);
+  const [wasReferred, setWasReferred] = useState(false);
+  const [isLoadingReferral, setIsLoadingReferral] = useState(false);
 
   // Get user initials for avatar fallback
   const getUserInitials = () => {
@@ -22,6 +33,43 @@ const Profile = () => {
     const names = user.displayName.split(' ');
     if (names.length === 1) return names[0][0];
     return `${names[0][0]}${names[names.length - 1][0]}`;
+  };
+
+  // Load referral info when component mounts
+  useEffect(() => {
+    if (user?.uid) {
+      loadReferralInfo();
+    }
+  }, [user]);
+
+  const loadReferralInfo = async () => {
+    if (!user?.uid) return;
+    
+    setIsLoadingReferral(true);
+    try {
+      // Get referral info for sharing
+      const data = await getUserReferralInfo(user.uid);
+      setReferralInfo({
+        referralCode: data.referralCode,
+        referralLink: data.referralLink,
+        referralCount: data.referralCount,
+        referredUsers: data.referredUsers
+      });
+      
+      // Get usage data to check if user was referred
+      const usage = await getUserUsage(user.uid);
+      setWasReferred(!!usage.referredBy);
+      setReferralBonus(usage.referralBonus || (usage.referredBy ? REFERRAL_REWARD : 0));
+    } catch (error) {
+      console.error("Error fetching referral info:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load referral information. Please try again later.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingReferral(false);
+    }
   };
 
   const handleUpdateProfile = async () => {
@@ -46,6 +94,24 @@ const Profile = () => {
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  const handleCopyReferralLink = () => {
+    navigator.clipboard.writeText(referralInfo.referralLink)
+      .then(() => {
+        toast({
+          title: "Copied!",
+          description: "Referral link copied to clipboard.",
+        });
+      })
+      .catch((err) => {
+        console.error("Failed to copy: ", err);
+        toast({
+          title: "Failed to copy",
+          description: "Please try again or copy manually.",
+          variant: "destructive",
+        });
+      });
   };
 
   return (
@@ -174,6 +240,130 @@ const Profile = () => {
                       : user?.providerData[0]?.providerId === 'google.com'
                       ? 'Google'
                       : user?.providerData[0]?.providerId || 'Unknown'}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Referral Program Card */}
+          <Card className="col-span-full md:col-span-3">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div>
+                <CardTitle className="text-xl">Referral Program</CardTitle>
+                <CardDescription>Invite colleagues and earn bonus AI suggestions</CardDescription>
+              </div>
+              <Gift className="h-5 w-5 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-6 md:grid-cols-2">
+                {/* Referral Stats */}
+                <div className="p-4 bg-primary/5 border border-primary/10 rounded-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-medium flex items-center">
+                      <Award className="h-4 w-4 mr-2 text-primary" />
+                      Your AI Suggestion Rewards
+                    </h3>
+                    <span className="text-sm bg-primary/10 text-primary px-2 py-1 rounded-full">
+                      {isLoadingReferral ? '...' : `${referralInfo.referralCount} referrals`}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span>Base Monthly Allowance</span>
+                      <span className="font-medium">{FREE_MONTHLY_SUGGESTIONS} suggestions</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Your Referral Bonus</span>
+                      <span className="font-medium text-primary">+{isLoadingReferral ? '...' : (referralInfo.referralCount * REFERRAL_REWARD)} suggestions</span>
+                    </div>
+                    {wasReferred && (
+                      <div className="flex justify-between text-sm">
+                        <span className="flex items-center">
+                          <UserPlus className="h-3 w-3 mr-1 text-green-600" />
+                          Referred User Bonus
+                        </span>
+                        <span className="font-medium text-green-600">+{isLoadingReferral ? '...' : referralBonus} suggestions</span>
+                      </div>
+                    )}
+                    <Separator />
+                    <div className="flex justify-between text-sm font-medium">
+                      <span>Total Monthly Allowance</span>
+                      <span>{isLoadingReferral ? '...' : (FREE_MONTHLY_SUGGESTIONS + (referralInfo.referralCount * REFERRAL_REWARD) + referralBonus)} suggestions</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium mb-2 flex items-center">
+                      <Users className="h-4 w-4 mr-2 text-primary" />
+                      Successful Referrals: {isLoadingReferral ? '...' : referralInfo.referredUsers.length}
+                    </h4>
+                    {wasReferred && (
+                      <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded text-sm text-green-700 flex items-center">
+                        <UserPlus className="h-4 w-4 mr-2 text-green-600" />
+                        You were referred by another user and received a bonus!
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Referral Link */}
+                <div>
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-lg font-medium mb-2">Share Your Referral Link</h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Each successful referral gives you {REFERRAL_REWARD} extra AI suggestions per month. 
+                        Your colleagues will also get {REFERRAL_REWARD} bonus suggestions when they sign up with your link.
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="referral-code">Your Referral Code</Label>
+                      <Input 
+                        id="referral-code" 
+                        value={isLoadingReferral ? 'Loading...' : referralInfo.referralCode}
+                        readOnly 
+                        className="font-mono bg-muted"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="referral-link">Your Referral Link</Label>
+                      <div className="flex space-x-2">
+                        <Input 
+                          id="referral-link" 
+                          value={isLoadingReferral ? 'Loading...' : referralInfo.referralLink}
+                          readOnly 
+                          className="bg-muted"
+                        />
+                        <Button onClick={handleCopyReferralLink} disabled={isLoadingReferral}>
+                          <Copy className="h-4 w-4 mr-2" />
+                          Copy
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <Button 
+                      variant="outline" 
+                      className="w-full mt-2"
+                      onClick={() => {
+                        if (navigator.share) {
+                          navigator.share({
+                            title: 'Join PureCare with my referral',
+                            text: 'Sign up to PureCare using my referral link and get bonus AI suggestions!',
+                            url: referralInfo.referralLink
+                          }).catch(err => console.error('Error sharing:', err));
+                        } else {
+                          handleCopyReferralLink();
+                        }
+                      }}
+                      disabled={isLoadingReferral}
+                    >
+                      <Share className="h-4 w-4 mr-2" />
+                      Share Referral Link
+                    </Button>
                   </div>
                 </div>
               </div>

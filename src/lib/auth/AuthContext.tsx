@@ -62,6 +62,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
       
+      // Initialize user usage data
+      if (userCredential.user) {
+        // Import here to avoid circular dependencies
+        const { getUserUsage } = await import('@/lib/firebase/referralService');
+        await getUserUsage(userCredential.user.uid);
+      }
+      
       toast({
         title: "Account created successfully!",
         description: "Welcome to PureCare",
@@ -102,8 +109,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const userCredential = await signInWithPopup(auth, googleProvider);
       
+      // Check if this is a new user by looking at metadata
+      const isNewUser = userCredential.user.metadata.creationTime === userCredential.user.metadata.lastSignInTime;
+      
+      // If new user, initialize usage data
+      if (isNewUser && userCredential.user) {
+        // Import here to avoid circular dependencies
+        const { getUserUsage } = await import('@/lib/firebase/referralService');
+        await getUserUsage(userCredential.user.uid);
+      }
+      
       toast({
-        title: "Signed in with Google successfully!",
+        title: isNewUser ? "Account created successfully!" : "Signed in with Google successfully!",
         description: "Welcome to PureCare",
       });
       
