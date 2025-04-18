@@ -11,7 +11,7 @@ import {
   Users, 
   Calendar, 
   FileText, 
-  Stethoscope, 
+  Heart, 
   DollarSign, 
   Package, 
   Home, 
@@ -106,7 +106,7 @@ const Navbar = () => {
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link to="/" className="text-xl font-bold text-primary flex items-center">
-                <Stethoscope className="h-6 w-6 mr-2" />
+                <Heart className="h-6 w-6 mr-2 rainbow-heart" fill="currentColor" />
                 PureCare
               </Link>
             </div>
@@ -204,7 +204,7 @@ const Navbar = () => {
                         className="text-xl font-bold text-primary flex items-center" 
                         onClick={() => setIsMenuOpen(false)}
                       >
-                        <Stethoscope className="h-7 w-7 mr-2" />
+                        <Heart className="h-7 w-7 mr-2 rainbow-heart" fill="currentColor" />
                         <span className="text-gradient">PureCare</span>
                       </Link>
                     </div>
@@ -355,6 +355,44 @@ const styles = `
   background: linear-gradient(to right, #3b82f6, #8b5cf6);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+@keyframes rainbow {
+  0% { color: #FF0000; } /* Bright Red */
+  3.33% { color: #FF1100; }
+  6.66% { color: #FF3700; }
+  10% { color: #FF5E00; } /* Orange-Red */
+  13.33% { color: #FF7F00; } /* Dark Orange */
+  16.66% { color: #FFA500; } /* Orange */
+  20% { color: #FFCC00; } /* Orange-Yellow */
+  23.33% { color: #FFFF00; } /* Yellow */
+  26.66% { color: #CCFF00; } /* Yellow-Green */
+  30% { color: #99FF00; }
+  33.33% { color: #66FF00; } /* Lime */
+  36.66% { color: #33FF00; }
+  40% { color: #00FF00; } /* Green */
+  43.33% { color: #00FF33; }
+  46.66% { color: #00FF66; } /* Mint */
+  50% { color: #00FF99; }
+  53.33% { color: #00FFCC; } /* Turquoise */
+  56.66% { color: #00FFFF; } /* Cyan */
+  60% { color: #00CCFF; } /* Light Blue */
+  63.33% { color: #0099FF; }
+  66.66% { color: #0066FF; } /* Blue */
+  70% { color: #0033FF; }
+  73.33% { color: #0000FF; } /* Deep Blue */
+  76.66% { color: #3300FF; } /* Indigo */
+  80% { color: #6600FF; } /* Violet */
+  83.33% { color: #9900FF; } /* Purple */
+  86.66% { color: #CC00FF; } /* Magenta */
+  90% { color: #FF00FF; } /* Pink */
+  93.33% { color: #FF00CC; }
+  96.66% { color: #FF0099; } /* Hot Pink */
+  100% { color: #FF0000; } /* Back to Red */
+}
+
+.rainbow-heart {
+  animation: rainbow 8s linear infinite;
 }
 
 /* Style the built-in close button */
