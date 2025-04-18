@@ -9,6 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_APP_ID: string;
   readonly VITE_FIREBASE_MEASUREMENT_ID: string;
   readonly VITE_GOOGLE_GEMINI_API_KEY: string;
+  readonly VITE_GOOGLE_API_KEY: string;
+  readonly VITE_GOOGLE_CLIENT_ID: string;
   // more env variables...
 }
 

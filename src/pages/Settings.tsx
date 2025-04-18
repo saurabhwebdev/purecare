@@ -56,7 +56,8 @@ import {
   FileText,
   CircleX,
   CheckCircle2,
-  Loader2
+  Loader2,
+  Mail
 } from 'lucide-react';
 import {
   getUserSettings,
@@ -66,7 +67,9 @@ import {
   LocationSettings,
   FinancialSettings,
   NotificationSettings,
-  AppearanceSettings
+  AppearanceSettings,
+  GoogleSettings,
+  GmailSettings
 } from '@/lib/firebase/settingsService';
 
 // Country data with currency information
@@ -158,6 +161,26 @@ const Settings = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
 
+  // Google Settings
+  const [calendarEnabled, setCalendarEnabled] = useState(false);
+  const [calendarId, setCalendarId] = useState('');
+  const [syncAppointments, setSyncAppointments] = useState(true);
+  const [syncReminders, setSyncReminders] = useState(true);
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+  const [lastSyncDate, setLastSyncDate] = useState<Date | null>(null);
+  const [googleClientId, setGoogleClientId] = useState('');
+  const [googleApiKey, setGoogleApiKey] = useState('');
+
+  // Gmail Settings
+  const [gmailEnabled, setGmailEnabled] = useState(false);
+  const [gmailClientId, setGmailClientId] = useState('');
+  const [gmailApiKey, setGmailApiKey] = useState('');
+  const [syncEmails, setSyncEmails] = useState(true);
+  const [syncContacts, setSyncContacts] = useState(true);
+  const [emailLabels, setEmailLabels] = useState<string[]>([]);
+  const [gmailApiKeyConfigured, setGmailApiKeyConfigured] = useState(false);
+  const [gmailLastSyncDate, setGmailLastSyncDate] = useState<Date | null>(null);
+
   // Deletion steps with messages and icons
   const deletionSteps = [
     { message: "Preparing to delete account...", icon: Loader2 },
@@ -215,6 +238,39 @@ const Settings = () => {
         // Populate appearance settings
         setDarkMode(settings.appearance.darkMode);
         setCompactMode(settings.appearance.compactMode);
+
+        // Helper function to safely parse dates
+        const safelyParseDate = (dateValue: any) => {
+          if (!dateValue) return null;
+          try {
+            const date = new Date(dateValue);
+            return isNaN(date.getTime()) ? null : date;
+          } catch (e) {
+            return null;
+          }
+        };
+
+        // Populate Google settings
+        setCalendarEnabled(settings.google.calendarEnabled);
+        setCalendarId(settings.google.calendarId);
+        setSyncAppointments(settings.google.syncAppointments);
+        setSyncReminders(settings.google.syncReminders);
+        setApiKeyConfigured(settings.google.apiKeyConfigured === undefined ? false : !!settings.google.apiKeyConfigured);
+        setLastSyncDate(safelyParseDate(settings.google.lastSyncDate));
+        setGoogleClientId(settings.google.clientId || '');
+        setGoogleApiKey(settings.google.apiKey || '');
+
+        // Populate Gmail settings if they exist
+        if (settings.gmail) {
+          setGmailEnabled(settings.gmail.enabled || false);
+          setGmailClientId(settings.gmail.clientId || '');
+          setGmailApiKey(settings.gmail.apiKey || '');
+          setSyncEmails(settings.gmail.syncEmails !== false);
+          setSyncContacts(settings.gmail.syncContacts !== false);
+          setEmailLabels(settings.gmail.emailLabels || []);
+          setGmailApiKeyConfigured(settings.gmail.apiKeyConfigured === undefined ? false : !!settings.gmail.apiKeyConfigured);
+          setGmailLastSyncDate(safelyParseDate(settings.gmail.lastSyncDate));
+        }
       } catch (error) {
         console.error('Error loading settings:', error);
         toast({
@@ -342,6 +398,54 @@ const Settings = () => {
     }
   };
 
+  const saveGoogleSettings = async () => {
+    if (!user) return;
+    
+    // Ensure apiKeyConfigured has a boolean value (never undefined)
+    const googleSettings: GoogleSettings = {
+      calendarEnabled,
+      calendarId,
+      syncAppointments,
+      syncReminders,
+      apiKeyConfigured: apiKeyConfigured === undefined ? false : apiKeyConfigured,
+      lastSyncDate,
+      clientId: googleClientId,
+      apiKey: googleApiKey
+    };
+    
+    try {
+      await updateSettingsModule(user.uid, 'google', googleSettings);
+      return true;
+    } catch (error) {
+      console.error('Error saving Google settings:', error);
+      return false;
+    }
+  };
+
+  const saveGmailSettings = async () => {
+    if (!user) return;
+    
+    // Ensure apiKeyConfigured has a boolean value (never undefined)
+    const gmailSettings: GmailSettings = {
+      enabled: gmailEnabled,
+      clientId: gmailClientId,
+      apiKey: gmailApiKey,
+      syncEmails,
+      syncContacts,
+      emailLabels,
+      lastSyncDate: gmailLastSyncDate,
+      apiKeyConfigured: gmailApiKeyConfigured === undefined ? false : gmailApiKeyConfigured
+    };
+    
+    try {
+      await updateSettingsModule(user.uid, 'gmail', gmailSettings);
+      return true;
+    } catch (error) {
+      console.error('Error saving Gmail settings:', error);
+      return false;
+    }
+  };
+  
   const handleSaveSettings = async () => {
     if (!user) return;
     
@@ -354,7 +458,9 @@ const Settings = () => {
         saveLocationSettings(),
         saveFinancialSettings(),
         saveNotificationSettings(),
-        saveAppearanceSettings()
+        saveAppearanceSettings(),
+        saveGoogleSettings(),
+        saveGmailSettings()
       ]);
       
       // Check if all saves were successful
@@ -374,7 +480,7 @@ const Settings = () => {
       console.error('Error saving settings:', error);
       toast({
         title: 'Error saving settings',
-        description: 'There was a problem saving your settings.',
+        description: 'There was a problem saving your settings. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -491,7 +597,7 @@ const Settings = () => {
         ) : (
           <>
         <Tabs defaultValue="clinic" className="space-y-6">
-          <TabsList className="grid grid-cols-2 md:grid-cols-6 w-full h-auto">
+          <TabsList className="grid grid-cols-2 md:grid-cols-7 w-full h-auto">
             <TabsTrigger value="clinic" className="flex items-center gap-2">
               <Building2 className="h-4 w-4" />
               <span className="hidden md:inline">Clinic</span>
@@ -511,6 +617,10 @@ const Settings = () => {
             <TabsTrigger value="appearance" className="flex items-center gap-2">
               <Palette className="h-4 w-4" />
               <span className="hidden md:inline">Appearance</span>
+            </TabsTrigger>
+            <TabsTrigger value="google" className="flex items-center gap-2">
+              <Globe className="h-4 w-4" />
+              <span className="hidden md:inline">Google</span>
             </TabsTrigger>
             <TabsTrigger value="security" className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4" />
@@ -1113,6 +1223,397 @@ const Settings = () => {
                 </Button>
               </CardFooter>
             </Card>
+          </TabsContent>
+
+          {/* Google Tab */}
+          <TabsContent value="google" className="space-y-6">
+            <Tabs defaultValue="calendar" className="w-full">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold">Google Integrations</h2>
+                <TabsList>
+                  <TabsTrigger value="calendar" className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    <span>Calendar</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="gmail" className="flex items-center gap-2">
+                    <Mail className="h-4 w-4" />
+                    <span>Gmail</span>
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              {/* Google Calendar Tab Content */}
+              <TabsContent value="calendar" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Google Calendar Integration</CardTitle>
+                    <CardDescription>
+                      Sync appointments with your Google Calendar to manage your schedule more efficiently
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="bg-muted p-4 rounded-lg mb-4">
+                      <h3 className="text-sm font-medium mb-2">How to set up Google Calendar integration:</h3>
+                      <ol className="list-decimal list-inside text-sm space-y-1 text-muted-foreground">
+                        <li>Go to <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Cloud Console</a></li>
+                        <li>Create a new project or select an existing one</li>
+                        <li>Enable the Google Calendar API for your project</li>
+                        <li>Create OAuth credentials (Web application type)</li>
+                        <li>Add your application's domain to the authorized redirect URIs</li>
+                        <li>Copy the Client ID and add it below</li>
+                      </ol>
+                    </div>
+
+                    <div className="flex justify-center mb-4">
+                      <Button 
+                        onClick={() => navigate('/google-calendar-setup')}
+                        className="w-full md:w-auto"
+                      >
+                        <Calendar className="mr-2 h-4 w-4" />
+                        Open Google Calendar Setup Wizard
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="calendar-enabled" className="text-base font-medium">Enable Google Calendar</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Turn on to sync appointments with Google Calendar
+                        </p>
+                      </div>
+                      <Switch
+                        id="calendar-enabled"
+                        checked={calendarEnabled}
+                        onCheckedChange={setCalendarEnabled}
+                      />
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="google-client-id" className="text-base font-medium">Google OAuth Client ID</Label>
+                      <Input
+                        id="google-client-id"
+                        value={googleClientId}
+                        onChange={(e) => setGoogleClientId(e.target.value)}
+                        placeholder="Your Google OAuth Client ID"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        The OAuth 2.0 Client ID from your Google Cloud Console
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="google-api-key" className="text-base font-medium">Google API Key</Label>
+                      <Input
+                        id="google-api-key"
+                        value={googleApiKey}
+                        onChange={(e) => setGoogleApiKey(e.target.value)}
+                        placeholder="Your Google API Key (optional)"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        The API Key from your Google Cloud Console (only needed for certain advanced features)
+                      </p>
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="calendar-id">Google Calendar ID</Label>
+                      <Input
+                        id="calendar-id"
+                        value={calendarId}
+                        onChange={(e) => setCalendarId(e.target.value)}
+                        placeholder="e.g., primary or your_email@gmail.com"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Use "primary" for your main calendar or enter a specific calendar ID
+                      </p>
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center justify-between space-x-2">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="sync-appointments" className="text-sm font-medium">Sync Appointments</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Automatically add all appointments to Google Calendar
+                          </p>
+                        </div>
+                        <Switch
+                          id="sync-appointments"
+                          checked={syncAppointments}
+                          onCheckedChange={setSyncAppointments}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between space-x-2">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="sync-reminders" className="text-sm font-medium">Sync Reminders</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Add email and notification reminders for appointments
+                          </p>
+                        </div>
+                        <Switch
+                          id="sync-reminders"
+                          checked={syncReminders}
+                          onCheckedChange={setSyncReminders}
+                        />
+                      </div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="api-key-configured" className="text-sm font-medium">API Configuration Status</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Indicates whether your Google API keys are properly configured and authenticated
+                        </p>
+                      </div>
+                      <div className="flex items-center">
+                        {apiKeyConfigured ? (
+                          <div className="flex items-center text-green-500">
+                            <CheckCircle2 className="h-5 w-5 mr-1" />
+                            <span className="text-sm font-medium">Configured</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center text-amber-500">
+                            <AlertTriangle className="h-5 w-5 mr-1" />
+                            <span className="text-sm font-medium">Not Configured</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {lastSyncDate && lastSyncDate instanceof Date && !isNaN(lastSyncDate.getTime()) && (
+                      <div className="text-xs text-muted-foreground text-center mt-2">
+                        Last synced: {lastSyncDate.toLocaleString()}
+                      </div>
+                    )}
+                  </CardContent>
+                  <CardFooter className="flex justify-end">
+                    <Button 
+                      onClick={() => {
+                        setIsSaving(true);
+                        saveGoogleSettings().then((success) => {
+                          setIsSaving(false);
+                          if (success) {
+                            toast({
+                              title: "Calendar settings saved",
+                              description: "Your Google Calendar settings have been updated successfully."
+                            });
+                          } else {
+                            toast({
+                              title: "Error saving settings",
+                              description: "There was a problem saving your Google Calendar settings.",
+                              variant: "destructive"
+                            });
+                          }
+                        });
+                      }} 
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <>
+                          <span className="h-4 w-4 border-t-2 border-r-2 border-background rounded-full animate-spin mr-2"></span>
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Calendar Settings'
+                      )}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </TabsContent>
+
+              {/* Gmail Tab Content */}
+              <TabsContent value="gmail" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Gmail Integration</CardTitle>
+                    <CardDescription>
+                      Sync emails and contacts with your Gmail account to streamline patient communications
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="bg-muted p-4 rounded-lg mb-4">
+                      <h3 className="text-sm font-medium mb-2">How to set up Gmail integration:</h3>
+                      <ol className="list-decimal list-inside text-sm space-y-1 text-muted-foreground">
+                        <li>Go to <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Cloud Console</a></li>
+                        <li>Create a new project or select an existing one</li>
+                        <li>Enable the Gmail API for your project</li>
+                        <li>Create OAuth credentials with appropriate scopes</li>
+                        <li>Add your application's domain to the authorized redirect URIs</li>
+                        <li>Copy the Client ID and add it below</li>
+                      </ol>
+                    </div>
+
+                    <div className="flex justify-center mb-4">
+                      <Button 
+                        onClick={() => navigate('/google-mail-setup')}
+                        className="w-full md:w-auto"
+                      >
+                        <Mail className="mr-2 h-4 w-4" />
+                        Open Gmail Setup Wizard
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="gmail-enabled" className="text-base font-medium">Enable Gmail Integration</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Turn on to enable email and contact syncing with Gmail
+                        </p>
+                      </div>
+                      <Switch
+                        id="gmail-enabled"
+                        checked={gmailEnabled}
+                        onCheckedChange={setGmailEnabled}
+                      />
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="gmail-client-id" className="text-base font-medium">Gmail OAuth Client ID</Label>
+                      <Input
+                        id="gmail-client-id"
+                        value={gmailClientId}
+                        onChange={(e) => setGmailClientId(e.target.value)}
+                        placeholder="Your Gmail OAuth Client ID"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        The OAuth 2.0 Client ID from your Google Cloud Console
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="gmail-api-key" className="text-base font-medium">Gmail API Key</Label>
+                      <Input
+                        id="gmail-api-key"
+                        value={gmailApiKey}
+                        onChange={(e) => setGmailApiKey(e.target.value)}
+                        placeholder="Your Gmail API Key (optional)"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        The API Key from your Google Cloud Console
+                      </p>
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="email-labels" className="text-base font-medium">Email Labels to Sync</Label>
+                      <Input
+                        id="email-labels"
+                        value={emailLabels.join(',')}
+                        onChange={(e) => setEmailLabels(e.target.value.split(',').map(label => label.trim()).filter(label => label !== ''))}
+                        placeholder="e.g., INBOX,SENT,Patients,Appointments"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Specify which email labels to sync, separated by commas. Leave blank to sync all emails.
+                      </p>
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center justify-between space-x-2">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="sync-emails" className="text-sm font-medium">Sync Emails</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Sync emails from the specified labels
+                          </p>
+                        </div>
+                        <Switch
+                          id="sync-emails"
+                          checked={syncEmails}
+                          onCheckedChange={setSyncEmails}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between space-x-2">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="sync-contacts" className="text-sm font-medium">Sync Contacts</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Sync contacts from Gmail to your patient database
+                          </p>
+                        </div>
+                        <Switch
+                          id="sync-contacts"
+                          checked={syncContacts}
+                          onCheckedChange={setSyncContacts}
+                        />
+                      </div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="gmail-api-configured" className="text-sm font-medium">API Configuration Status</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Indicates whether your Gmail API keys are properly configured and authenticated
+                        </p>
+                      </div>
+                      <div className="flex items-center">
+                        {gmailApiKeyConfigured ? (
+                          <div className="flex items-center text-green-500">
+                            <CheckCircle2 className="h-5 w-5 mr-1" />
+                            <span className="text-sm font-medium">Configured</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center text-amber-500">
+                            <AlertTriangle className="h-5 w-5 mr-1" />
+                            <span className="text-sm font-medium">Not Configured</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {gmailLastSyncDate && gmailLastSyncDate instanceof Date && !isNaN(gmailLastSyncDate.getTime()) && (
+                      <div className="text-xs text-muted-foreground text-center mt-2">
+                        Last synced: {gmailLastSyncDate.toLocaleString()}
+                      </div>
+                    )}
+                  </CardContent>
+                  <CardFooter className="flex justify-end">
+                    <Button 
+                      onClick={() => {
+                        setIsSaving(true);
+                        saveGmailSettings().then((success) => {
+                          setIsSaving(false);
+                          if (success) {
+                            toast({
+                              title: "Gmail settings saved",
+                              description: "Your Gmail settings have been updated successfully."
+                            });
+                          } else {
+                            toast({
+                              title: "Error saving settings",
+                              description: "There was a problem saving your Gmail settings.",
+                              variant: "destructive"
+                            });
+                          }
+                        });
+                      }} 
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <>
+                          <span className="h-4 w-4 border-t-2 border-r-2 border-background rounded-full animate-spin mr-2"></span>
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Gmail Settings'
+                      )}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </TabsContent>
 
           {/* Security Tab */}

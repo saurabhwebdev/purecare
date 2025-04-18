@@ -62,6 +62,8 @@ export interface Appointment {
   status: 'Scheduled' | 'Completed' | 'Cancelled' | 'No-Show';
   notes?: string;
   provider: string;
+  googleEventId?: string;
+  syncedWithGoogle?: boolean;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -375,6 +377,31 @@ export const updateAppointmentStatus = async (
     }
   } catch (error) {
     console.error('Error updating appointment status:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update an appointment with a Google Calendar event ID
+ * @param userId - The ID of the user/clinic
+ * @param appointmentId - The ID of the appointment
+ * @param googleEventId - The Google Calendar event ID
+ */
+export const updateAppointmentWithGoogleEventId = async (
+  userId: string,
+  appointmentId: string,
+  googleEventId: string
+): Promise<void> => {
+  try {
+    const docRef = doc(db, 'users', userId, 'appointments', appointmentId);
+    
+    await updateDoc(docRef, {
+      googleEventId,
+      syncedWithGoogle: true,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error updating appointment with Google Calendar event ID:', error);
     throw error;
   }
 }; 

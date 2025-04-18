@@ -20,6 +20,8 @@ import Appointments from "./pages/Appointments";
 import MedicalRecords from "./pages/MedicalRecords";
 import NotFound from "./pages/NotFound";
 import Inventory from "./pages/Inventory";
+import GoogleCalendarSetup from "./pages/GoogleCalendarSetup";
+import GoogleMailSetup from "./pages/GoogleMailSetup";
 
 // Prescription Pages
 import Prescriptions from "./pages/Prescriptions";
@@ -90,6 +92,22 @@ const App = () => (
               element={
                 <PrivateRoute>
                   <Settings />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/google-calendar-setup" 
+              element={
+                <PrivateRoute>
+                  <GoogleCalendarSetup />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/google-mail-setup" 
+              element={
+                <PrivateRoute>
+                  <GoogleMailSetup />
                 </PrivateRoute>
               } 
             />

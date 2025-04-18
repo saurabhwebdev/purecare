@@ -57,6 +57,7 @@ import {
   Users,
   Filter,
   MoreVertical,
+  CalendarCheck
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -82,6 +83,7 @@ import {
   Appointment,
   Patient
 } from '@/lib/firebase/patientService';
+import { syncAppointmentToGoogleCalendar } from '@/lib/google/appointmentSyncService';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Appointment type options
@@ -137,6 +139,7 @@ const Appointments = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [syncingAppointmentId, setSyncingAppointmentId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
   const [timeRangeFilter, setTimeRangeFilter] = useState('all');
@@ -324,6 +327,47 @@ const Appointments = () => {
       ...newAppointment,
       [field]: value
     });
+  };
+
+  // Handle syncing an appointment with Google Calendar
+  const handleSyncToGoogleCalendar = async (appointment: Appointment) => {
+    if (!user || !appointment.id) return;
+    
+    try {
+      setIsLoading(true);
+      setSyncingAppointmentId(appointment.id);
+      
+      // Sync appointment with Google Calendar
+      const result = await syncAppointmentToGoogleCalendar(user.uid, appointment);
+      
+      // Show result toast
+      if (result.success) {
+        toast({
+          title: "Sync successful",
+          description: result.message,
+        });
+        
+        // Refresh appointments to get the updated syncedWithGoogle status
+        const updatedAppointments = await getAppointments(user.uid);
+        setAppointments(updatedAppointments);
+      } else {
+        toast({
+          title: "Sync failed",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error syncing with Google Calendar:', error);
+      toast({
+        title: 'Error',
+        description: 'There was a problem syncing with Google Calendar.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+      setSyncingAppointmentId(null);
+    }
   };
 
   return (
@@ -578,7 +622,17 @@ const Appointments = () => {
                       </TableCell>
                       <TableCell>{appointment.type}</TableCell>
                       <TableCell>{appointment.duration} minutes</TableCell>
-                      <TableCell>{getStatusBadge(appointment.status)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          {getStatusBadge(appointment.status)}
+                          {appointment.syncedWithGoogle && (
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs flex items-center gap-1 w-fit">
+                              <CalendarCheck className="h-3 w-3" />
+                              Google synced
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -610,6 +664,23 @@ const Appointments = () => {
                             >
                               <AlertCircle className="h-4 w-4 mr-2 text-amber-600" />
                               Mark as No-Show
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => handleSyncToGoogleCalendar(appointment)}
+                              disabled={appointment.syncedWithGoogle || syncingAppointmentId === appointment.id}
+                            >
+                              {syncingAppointmentId === appointment.id ? (
+                                <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                              ) : (
+                                <CalendarCheck className="h-4 w-4 mr-2 text-blue-600" />
+                              )}
+                              {syncingAppointmentId === appointment.id 
+                                ? 'Syncing...' 
+                                : appointment.syncedWithGoogle 
+                                  ? 'Already synced' 
+                                  : 'Sync to Google Calendar'
+                              }
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

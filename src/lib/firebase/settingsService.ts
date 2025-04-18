@@ -49,12 +49,36 @@ export interface AppearanceSettings {
   compactMode: boolean;
 }
 
+export interface GoogleSettings {
+  calendarEnabled: boolean;
+  calendarId: string;
+  syncAppointments: boolean;
+  syncReminders: boolean;
+  apiKeyConfigured: boolean;
+  lastSyncDate?: Date | null;
+  clientId?: string;
+  apiKey?: string;
+}
+
+export interface GmailSettings {
+  enabled: boolean;
+  clientId?: string;
+  apiKey?: string;
+  syncEmails: boolean;
+  syncContacts: boolean;
+  emailLabels?: string[];
+  lastSyncDate?: Date | null;
+  apiKeyConfigured: boolean;
+}
+
 export interface UserSettings {
   clinic: ClinicSettings;
   location: LocationSettings;
   financial: FinancialSettings;
   notifications: NotificationSettings;
   appearance: AppearanceSettings;
+  google: GoogleSettings;
+  gmail?: GmailSettings;
   lastUpdated?: Date;
 }
 
@@ -101,6 +125,26 @@ export const defaultSettings: UserSettings = {
   appearance: {
     darkMode: false,
     compactMode: false,
+  },
+  google: {
+    calendarEnabled: false,
+    calendarId: '',
+    syncAppointments: true,
+    syncReminders: true,
+    apiKeyConfigured: false,
+    lastSyncDate: null,
+    clientId: '',
+    apiKey: '',
+  },
+  gmail: {
+    enabled: false,
+    clientId: '',
+    apiKey: '',
+    syncEmails: true,
+    syncContacts: true,
+    emailLabels: [],
+    lastSyncDate: null,
+    apiKeyConfigured: false
   },
 };
 
