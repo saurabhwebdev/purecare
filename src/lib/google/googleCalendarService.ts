@@ -10,6 +10,7 @@ declare global {
         init: (params: {
           clientId: string;
           scope: string;
+          discoveryDocs?: string[];
         }) => Promise<any>;
         calendar: {
           events: {
@@ -17,6 +18,30 @@ declare global {
             insert: (params: any) => Promise<any>;
             delete: (params: any) => Promise<any>;
             list: (params: any) => Promise<any>;
+          };
+        };
+      };
+    };
+    google: {
+      accounts: {
+        id: {
+          initialize: (params: {
+            client_id: string;
+            callback: (response: any) => void;
+            auto_select?: boolean;
+            cancel_on_tap_outside?: boolean;
+          }) => void;
+          prompt: (callback?: (notification: any) => void) => void;
+          renderButton: (element: HTMLElement, options: any) => void;
+        };
+        oauth2: {
+          initTokenClient: (params: {
+            client_id: string;
+            scope: string;
+            callback: (tokenResponse: any) => void;
+            error_callback?: (error: any) => void;
+          }) => {
+            requestAccessToken: (overrideConfig?: { prompt?: string }) => void;
           };
         };
       };
@@ -57,6 +82,64 @@ export interface CalendarEvent {
     }[];
   };
 }
+
+// Global variable to track if we're in the process of loading Google Identity Services
+let loadingGIS = false;
+
+/**
+ * Load Google Identity Services script
+ * @returns Promise that resolves when GIS is loaded
+ */
+const loadGoogleIdentityServices = async (): Promise<boolean> => {
+  // Check if Google Identity Services script is already loaded
+  if (window.google?.accounts) {
+    return true;
+  }
+
+  // Prevent multiple simultaneous loads
+  if (loadingGIS) {
+    return new Promise((resolve) => {
+      // Poll for GIS initialization
+      const checkGIS = setInterval(() => {
+        if (window.google?.accounts) {
+          clearInterval(checkGIS);
+          resolve(true);
+        }
+      }, 100);
+      
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        clearInterval(checkGIS);
+        console.error('Timeout waiting for Google Identity Services to initialize');
+        resolve(false);
+      }, 10000);
+    });
+  }
+
+  loadingGIS = true;
+
+  // Load Google Identity Services script
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.id = 'google-identity-services-script';
+    script.async = true;
+    script.defer = true;
+    
+    script.onload = () => {
+      loadingGIS = false;
+      resolve(true);
+    };
+    
+    script.onerror = () => {
+      loadingGIS = false;
+      console.error('Failed to load Google Identity Services');
+      resolve(false);
+    };
+    
+    document.head.appendChild(script);
+  });
+};
 
 /**
  * Initialize Google Calendar API
@@ -145,21 +228,50 @@ export const authenticateWithGoogle = async (userId: string): Promise<boolean> =
       }
     }
 
+    // Load Google Identity Services
+    const gisLoaded = await loadGoogleIdentityServices();
+    if (!gisLoaded) {
+      console.error('Failed to load Google Identity Services');
+      return false;
+    }
+
     // Return a promise that resolves when auth is complete
     return new Promise((resolve) => {
-      window.gapi.load('client:auth2', async () => {
+      window.gapi.load('client', async () => {
         try {
+          // Initialize the gapi client
           await window.gapi.client.init({
             clientId: settings.google.clientId,
-            scope: 'https://www.googleapis.com/auth/calendar',
+            scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
+            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
           });
           
-          // Update the apiKeyConfigured flag if successful
-          await updateSettingsModule(userId, 'google', {
-            ...settings.google,
-            apiKeyConfigured: true
+          // Get access token using Google Identity Services
+          const tokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: settings.google.clientId,
+            scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
+            callback: async (tokenResponse) => {
+              if (tokenResponse.error) {
+                console.error('Error getting access token:', tokenResponse);
+                resolve(false);
+                return;
+              }
+
+              // Update the apiKeyConfigured flag if successful
+              await updateSettingsModule(userId, 'google', {
+                ...settings.google,
+                apiKeyConfigured: true
+              });
+              resolve(true);
+            },
+            error_callback: (error) => {
+              console.error('Error authenticating with Google:', error);
+              resolve(false);
+            }
           });
-          resolve(true);
+          
+          // Request an access token
+          tokenClient.requestAccessToken({ prompt: 'consent' });
         } catch (error) {
           console.error('Error authenticating with Google:', error);
           resolve(false);
@@ -201,34 +313,19 @@ export const ensureGoogleCalendarReady = async (userId: string): Promise<boolean
         return false;
       }
       
+      // Load Google Identity Services
+      const gisLoaded = await loadGoogleIdentityServices();
+      if (!gisLoaded) {
+        console.error('Failed to load Google Identity Services');
+        return false;
+      }
+      
       // Then authenticate
       const authenticated = await authenticateWithGoogle(userId);
       if (!authenticated) {
         console.error('Failed to authenticate with Google Calendar');
         return false;
       }
-      
-      // Finally, wait for calendar client to be available
-      return new Promise((resolve) => {
-        window.gapi.load('client:auth2', async () => {
-          try {
-            // Initialize client with the required scope
-            await window.gapi.client.init({
-              clientId: settings.google.clientId,
-              scope: 'https://www.googleapis.com/auth/calendar',
-              discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
-            } as any);
-            
-            // The discoveryDocs will automatically load the calendar API
-            // No need to call window.gapi.client.load separately
-            
-            resolve(true);
-          } catch (error) {
-            console.error('Error initializing Google Calendar client:', error);
-            resolve(false);
-          }
-        });
-      });
     }
     
     return true;

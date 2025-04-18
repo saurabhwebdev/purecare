@@ -140,7 +140,7 @@ const GoogleCalendarSetup = () => {
   // Step wizard state
   const { activeStep, setActiveStep } = useSteps({
     initialStep: 0,
-    steps: 4
+    steps: 5
   });
 
   // Load user settings from Firebase
@@ -203,7 +203,7 @@ const GoogleCalendarSetup = () => {
       });
       
       // Go to next step if not on the last step
-      if (activeStep < 3) {
+      if (activeStep < 4) {
         setActiveStep(activeStep + 1);
       }
       
@@ -252,6 +252,7 @@ const GoogleCalendarSetup = () => {
 
   const steps = [
     { title: "Create Google Cloud Project", description: "Set up your Google Cloud project" },
+    { title: "Configure OAuth Screen", description: "Set up OAuth consent screen" },
     { title: "Configure API Credentials", description: "Set up OAuth credentials" },
     { title: "Connect Calendar", description: "Link your Google Calendar" },
     { title: "Test & Finish", description: "Verify integration is working" }
@@ -336,6 +337,47 @@ const GoogleCalendarSetup = () => {
 
             {activeStep === 1 && (
               <div className="space-y-6">
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Important</AlertTitle>
+                  <AlertDescription>
+                    The OAuth consent screen configuration is required before creating OAuth credentials
+                  </AlertDescription>
+                </Alert>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Configure OAuth Consent Screen</h3>
+                  <ol className="list-decimal list-inside space-y-2 pl-4">
+                    <li>In your Google Cloud project, go to "APIs & Services" {'>'} "OAuth consent screen"</li>
+                    <li>Select "External" user type (unless you have a Google Workspace organization)</li>
+                    <li>Click "Create" to proceed</li>
+                    <li>Fill out the required fields in the "App information" section:
+                      <ul className="list-disc list-inside ml-5 mt-2">
+                        <li>App name: "PureCare"</li>
+                        <li>User support email: Your email address</li>
+                        <li>Developer contact information: Your email address</li>
+                      </ul>
+                    </li>
+                    <li>Click "Save and Continue"</li>
+                    <li>In the "Scopes" section, click "Add or remove scopes"</li>
+                    <li>Add the following scopes:
+                      <ul className="list-disc list-inside ml-5 mt-2">
+                        <li>https://www.googleapis.com/auth/calendar (Google Calendar API)</li>
+                        <li>https://www.googleapis.com/auth/calendar.events (Google Calendar Events)</li>
+                      </ul>
+                    </li>
+                    <li>Click "Save and Continue"</li>
+                    <li>Add any test users if needed (required for testing in development)</li>
+                    <li>Click "Save and Continue"</li>
+                    <li>Review your app configuration and click "Back to Dashboard"</li>
+                    <li>Note: For production use, you may need to verify your app with Google, which can take several days</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+
+            {activeStep === 2 && (
+              <div className="space-y-6">
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium">Create OAuth Credentials</h3>
                   <ol className="list-decimal list-inside space-y-2 pl-4">
@@ -387,7 +429,7 @@ const GoogleCalendarSetup = () => {
               </div>
             )}
 
-            {activeStep === 2 && (
+            {activeStep === 3 && (
               <div className="space-y-6">
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium">Select Google Calendar</h3>
@@ -446,7 +488,7 @@ const GoogleCalendarSetup = () => {
               </div>
             )}
 
-            {activeStep === 3 && (
+            {activeStep === 4 && (
               <div className="space-y-6">
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium">Test Connection</h3>
@@ -510,7 +552,7 @@ const GoogleCalendarSetup = () => {
               {activeStep > 0 ? "Back" : "Return to Settings"}
             </Button>
             
-            {activeStep < 3 ? (
+            {activeStep < 4 ? (
               <Button 
                 onClick={saveGoogleSettings} 
                 disabled={isSaving}
