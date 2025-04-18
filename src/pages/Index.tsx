@@ -39,7 +39,7 @@ const Index = () => {
           <div className="absolute bottom-0 left-0 w-2/3 h-1/2 bg-blue-500/5 rounded-full blur-[100px] transform -translate-x-1/4 translate-y-1/4"></div>
           <div className="absolute inset-0 bg-[url('/grid-pattern-dark.svg')] bg-repeat opacity-[0.03]"></div>
         </div>
-
+        
         <div className="container relative z-10 px-4 py-20 mx-auto lg:py-32">
           <div className="grid items-center grid-cols-1 gap-12 lg:grid-cols-2">
             {/* Left Column - Content */}
@@ -994,16 +994,9 @@ const Index = () => {
             
             {/* Local Edition Card */}
             <div className="relative bg-card/50 backdrop-blur-sm rounded-xl border-2 border-primary/50 overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
-              <div className="absolute top-0 right-0 bg-primary text-white text-xs font-medium px-3 py-1 rounded-bl-lg">
-                Recommended
-              </div>
-              
               <div className="p-6 border-b border-border">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xl font-semibold">Local Edition</h3>
-                  <Badge className="bg-primary border-primary/30">
-                    Premium
-                  </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">Full local installation</p>
                 <div>
