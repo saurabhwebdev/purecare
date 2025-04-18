@@ -22,6 +22,7 @@ import NotFound from "./pages/NotFound";
 import Inventory from "./pages/Inventory";
 import GoogleCalendarSetup from "./pages/GoogleCalendarSetup";
 import GoogleMailSetup from "./pages/GoogleMailSetup";
+import Documentation from "./pages/Documentation";
 
 // Prescription Pages
 import Prescriptions from "./pages/Prescriptions";
@@ -71,6 +72,7 @@ const App = () => (
             <Route path="/about" element={<About />} />
             <Route path="/careers" element={<Careers />} />
             
+            {/* Authenticated Routes */}
             <Route 
               path="/dashboard" 
               element={
@@ -223,6 +225,31 @@ const App = () => (
               element={
                 <PrivateRoute>
                   <InvoiceEdit />
+                </PrivateRoute>
+              } 
+            />
+            {/* Documentation Routes (Protected) */}
+            <Route 
+              path="/docs" 
+              element={
+                <PrivateRoute>
+                  <Documentation />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/docs/:category" 
+              element={
+                <PrivateRoute>
+                  <Documentation />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/docs/article/:id" 
+              element={
+                <PrivateRoute>
+                  <Documentation />
                 </PrivateRoute>
               } 
             />

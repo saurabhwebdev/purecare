@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { BookOpen } from 'lucide-react';
 
 const MinimalFooter = () => {
   return (
@@ -10,7 +11,11 @@ const MinimalFooter = () => {
             © {new Date().getFullYear()} PureCare. All rights reserved.
           </div>
           
-          <div className="flex space-x-6 mt-2 md:mt-0">
+          <div className="flex flex-wrap gap-4 md:gap-6 mt-2 md:mt-0 justify-center">
+            <Link to="/docs" className="text-xs text-foreground/70 hover:text-foreground transition-colors flex items-center gap-1">
+              <BookOpen className="h-3 w-3" />
+              <span>Documentation</span>
+            </Link>
             <Link to="/terms" className="text-xs text-foreground/70 hover:text-foreground transition-colors">
               Terms
             </Link>
