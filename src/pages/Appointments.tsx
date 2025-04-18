@@ -85,6 +85,11 @@ import {
 } from '@/lib/firebase/patientService';
 import { syncAppointmentToGoogleCalendar } from '@/lib/google/appointmentSyncService';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 
 // Appointment type options
 const appointmentTypes = [
@@ -333,6 +338,16 @@ const Appointments = () => {
   const handleSyncToGoogleCalendar = async (appointment: Appointment) => {
     if (!user || !appointment.id) return;
     
+    // Show warning toast that feature is unavailable
+    toast({
+      title: "Feature Unavailable",
+      description: "Google Calendar integration is currently under development. Please check back later when this feature is fully implemented.",
+      variant: "destructive",
+    });
+    
+    return;
+    
+    /* Original implementation - commented out until feature is ready
     try {
       setIsLoading(true);
       setSyncingAppointmentId(appointment.id);
@@ -368,6 +383,7 @@ const Appointments = () => {
       setIsLoading(false);
       setSyncingAppointmentId(null);
     }
+    */
   };
 
   return (
@@ -537,177 +553,153 @@ const Appointments = () => {
       </div>
 
       <div className="container mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <Select
-              value={statusFilter}
-              onValueChange={setStatusFilter}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Appointments</SelectItem>
-                <SelectItem value="Scheduled">Scheduled</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
-                <SelectItem value="Cancelled">Cancelled</SelectItem>
-                <SelectItem value="No-Show">No-Show</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Select
-              value={dateFilter}
-              onValueChange={setDateFilter}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by date" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Dates</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="tomorrow">Tomorrow</SelectItem>
-                <SelectItem value="upcoming">Upcoming</SelectItem>
-                <SelectItem value="past">Past</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="text-sm text-muted-foreground">
-            Showing {filteredAppointments.length} of {appointments.length} appointments
-          </div>
-        </div>
-        
-        <div className="rounded-lg border border-border bg-card">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Patient</TableHead>
-                  <TableHead>Date & Time</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  Array.from({ length: 5 }).map((_, index) => (
-                    <TableRow key={index}>
-                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                      <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-5 w-5" />
+          <AlertTitle>Google Calendar Integration Unavailable</AlertTitle>
+          <AlertDescription>
+            The Google Calendar sync feature is currently under development and testing. Please do not use this feature at this time. We are working to resolve authentication issues and will notify you when it's ready.
+          </AlertDescription>
+        </Alert>
+
+        <div className="rounded-md shadow bg-background">
+          <div className="grid gap-4 p-4">
+            <div className="rounded-lg border border-border bg-card">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Patient</TableHead>
+                      <TableHead>Date & Time</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))
-                ) : filteredAppointments.length > 0 ? (
-                  filteredAppointments.map((appointment) => (
-                    <TableRow key={appointment.id}>
-                      <TableCell className="font-medium">
-                        {appointment.patientName}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col space-y-1">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3 text-muted-foreground" />
-                            <span>{formatAppointmentDate(appointment.date)}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-sm">{appointment.time}</span>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{appointment.type}</TableCell>
-                      <TableCell>{appointment.duration} minutes</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          {getStatusBadge(appointment.status)}
-                          {appointment.syncedWithGoogle && (
-                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs flex items-center gap-1 w-fit">
-                              <CalendarCheck className="h-3 w-3" />
-                              Google synced
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                              <span className="sr-only">Open menu</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              onClick={() => handleUpdateStatus(appointment.id || '', 'Completed')}
-                              disabled={appointment.status === 'Completed'}
-                            >
-                              <Check className="h-4 w-4 mr-2 text-green-600" />
-                              Mark as Completed
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => handleUpdateStatus(appointment.id || '', 'Cancelled')}
-                              disabled={appointment.status === 'Cancelled'}
-                            >
-                              <X className="h-4 w-4 mr-2 text-red-600" />
-                              Cancel Appointment
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => handleUpdateStatus(appointment.id || '', 'No-Show')}
-                              disabled={appointment.status === 'No-Show'}
-                            >
-                              <AlertCircle className="h-4 w-4 mr-2 text-amber-600" />
-                              Mark as No-Show
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              onClick={() => handleSyncToGoogleCalendar(appointment)}
-                              disabled={appointment.syncedWithGoogle || syncingAppointmentId === appointment.id}
-                            >
-                              {syncingAppointmentId === appointment.id ? (
-                                <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                              ) : (
-                                <CalendarCheck className="h-4 w-4 mr-2 text-blue-600" />
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      Array.from({ length: 5 }).map((_, index) => (
+                        <TableRow key={index}>
+                          <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                          <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : filteredAppointments.length > 0 ? (
+                      filteredAppointments.map((appointment) => (
+                        <TableRow key={appointment.id}>
+                          <TableCell className="font-medium">
+                            {appointment.patientName}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col space-y-1">
+                              <div className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3 text-muted-foreground" />
+                                <span>{formatAppointmentDate(appointment.date)}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-sm">{appointment.time}</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{appointment.type}</TableCell>
+                          <TableCell>{appointment.duration} minutes</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              {getStatusBadge(appointment.status)}
+                              {appointment.syncedWithGoogle && (
+                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs flex items-center gap-1 w-fit">
+                                  <CalendarCheck className="h-3 w-3" />
+                                  Google synced
+                                </Badge>
                               )}
-                              {syncingAppointmentId === appointment.id 
-                                ? 'Syncing...' 
-                                : appointment.syncedWithGoogle 
-                                  ? 'Already synced' 
-                                  : 'Sync to Google Calendar'
-                              }
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
-                      {searchTerm || statusFilter !== 'all' || dateFilter !== 'all' ? (
-                        <div className="flex flex-col items-center justify-center text-muted-foreground">
-                          <Search className="h-10 w-10 mb-2 opacity-50" />
-                          <p>No appointments matching your filters</p>
-                          <p className="text-sm">Try adjusting your search or filter criteria</p>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center text-muted-foreground">
-                          <Calendar className="h-10 w-10 mb-2 opacity-50" />
-                          <p>No appointments yet</p>
-                          <p className="text-sm">Schedule your first appointment to get started</p>
-                        </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreVertical className="h-4 w-4" />
+                                  <span className="sr-only">Open menu</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  onClick={() => handleUpdateStatus(appointment.id || '', 'Completed')}
+                                  disabled={appointment.status === 'Completed'}
+                                >
+                                  <Check className="h-4 w-4 mr-2 text-green-600" />
+                                  Mark as Completed
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => handleUpdateStatus(appointment.id || '', 'Cancelled')}
+                                  disabled={appointment.status === 'Cancelled'}
+                                >
+                                  <X className="h-4 w-4 mr-2 text-red-600" />
+                                  Cancel Appointment
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => handleUpdateStatus(appointment.id || '', 'No-Show')}
+                                  disabled={appointment.status === 'No-Show'}
+                                >
+                                  <AlertCircle className="h-4 w-4 mr-2 text-amber-600" />
+                                  Mark as No-Show
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  onClick={() => handleSyncToGoogleCalendar(appointment)}
+                                  disabled={true}
+                                  className="text-muted-foreground"
+                                >
+                                  {syncingAppointmentId === appointment.id ? (
+                                    <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                                  ) : (
+                                    <CalendarCheck className="h-4 w-4 mr-2 text-muted" />
+                                  )}
+                                  {syncingAppointmentId === appointment.id 
+                                    ? 'Syncing...' 
+                                    : 'Google Calendar sync unavailable'
+                                  }
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem disabled className="text-red-500 text-xs italic">
+                                  <AlertCircle className="h-3 w-3 mr-2" />
+                                  Feature currently in development
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center">
+                          {searchTerm || statusFilter !== 'all' || dateFilter !== 'all' ? (
+                            <div className="flex flex-col items-center justify-center text-muted-foreground">
+                              <Search className="h-10 w-10 mb-2 opacity-50" />
+                              <p>No appointments matching your filters</p>
+                              <p className="text-sm">Try adjusting your search or filter criteria</p>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center text-muted-foreground">
+                              <Calendar className="h-10 w-10 mb-2 opacity-50" />
+                              <p>No appointments yet</p>
+                              <p className="text-sm">Schedule your first appointment to get started</p>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           </div>
         </div>
       </div>

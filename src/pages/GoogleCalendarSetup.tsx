@@ -278,6 +278,14 @@ const GoogleCalendarSetup = () => {
           </p>
         </div>
 
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-5 w-5" />
+          <AlertTitle className="text-lg font-semibold">Important Notice</AlertTitle>
+          <AlertDescription className="text-base">
+            This feature is currently under development and testing. Please do not use Google Calendar integration at this time as it may not function correctly. We are working to resolve authentication issues and will notify you when it's ready for use.
+          </AlertDescription>
+        </Alert>
+
         <Card className="mb-8">
           <CardHeader>
             <CardTitle>Setup Wizard</CardTitle>
@@ -490,6 +498,14 @@ const GoogleCalendarSetup = () => {
 
             {activeStep === 4 && (
               <div className="space-y-6">
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Feature Not Available</AlertTitle>
+                  <AlertDescription>
+                    Google Calendar integration is currently under development. Even if test connection appears successful, actual synchronization may not work properly. Please check back later when this feature is fully implemented.
+                  </AlertDescription>
+                </Alert>
+
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium">Test Connection</h3>
                   <p className="text-sm text-muted-foreground">
