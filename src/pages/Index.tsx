@@ -315,7 +315,7 @@ const Index = () => {
                     <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-blue-500/20 rounded-2xl blur-[25px] -z-10"></div>
                     <div className="border border-border/60 bg-card/30 rounded-xl shadow-lg backdrop-blur-sm overflow-hidden">
                       <img 
-                        src="/screenshots/patient-registration.webp" 
+                        src="/screenshots/patient-registration.png" 
                         alt="Patient Registration Interface" 
                         className="w-full h-auto"
                       />
@@ -331,7 +331,7 @@ const Index = () => {
                     <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/20 to-purple-500/20 rounded-2xl blur-[25px] -z-10"></div>
                     <div className="border border-border/60 bg-card/30 rounded-xl shadow-lg backdrop-blur-sm overflow-hidden">
                       <img 
-                        src="/screenshots/appointment-management.webp" 
+                        src="/screenshots/appointment-management.png" 
                         alt="Appointment Management Interface" 
                         className="w-full h-auto"
                       />
@@ -395,7 +395,7 @@ const Index = () => {
                     <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/20 to-green-500/20 rounded-2xl blur-[25px] -z-10"></div>
                     <div className="border border-border/60 bg-card/30 rounded-xl shadow-lg backdrop-blur-sm overflow-hidden">
                       <img 
-                        src="/screenshots/prescription-billing.webp" 
+                        src="/screenshots/prescription-billing.png" 
                         alt="Prescription and Billing Interface" 
                         className="w-full h-auto"
                       />
