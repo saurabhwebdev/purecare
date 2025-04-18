@@ -90,6 +90,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
+import { Switch } from '@/components/ui/switch';
 
 // Appointment type options
 const appointmentTypes = [
@@ -123,18 +124,53 @@ const formatAppointmentDate = (date: string) => {
 
 // Get status badge variant
 const getStatusBadge = (status: string) => {
+  const baseClasses = "text-xs py-0.5 px-2 h-5 min-w-[2rem] inline-flex items-center justify-center font-medium";
+  
   switch (status) {
     case 'Scheduled':
-      return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Scheduled</Badge>;
+      return (
+        <span className="group relative">
+          <Badge variant="outline" className={`bg-blue-50 text-blue-700 border-blue-200 ${baseClasses}`}>S</Badge>
+          <span className="absolute -top-7 left-1/2 -translate-x-1/2 hidden group-hover:block bg-black/80 text-white text-xs rounded py-1 px-2 whitespace-nowrap">Scheduled</span>
+        </span>
+      );
     case 'Completed':
-      return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Completed</Badge>;
+      return (
+        <span className="group relative">
+          <Badge variant="outline" className={`bg-green-50 text-green-700 border-green-200 ${baseClasses}`}>C</Badge>
+          <span className="absolute -top-7 left-1/2 -translate-x-1/2 hidden group-hover:block bg-black/80 text-white text-xs rounded py-1 px-2 whitespace-nowrap">Completed</span>
+        </span>
+      );
     case 'Cancelled':
-      return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Cancelled</Badge>;
+      return (
+        <span className="group relative">
+          <Badge variant="outline" className={`bg-red-50 text-red-700 border-red-200 ${baseClasses}`}>X</Badge>
+          <span className="absolute -top-7 left-1/2 -translate-x-1/2 hidden group-hover:block bg-black/80 text-white text-xs rounded py-1 px-2 whitespace-nowrap">Cancelled</span>
+        </span>
+      );
     case 'No-Show':
-      return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">No-Show</Badge>;
+      return (
+        <span className="group relative">
+          <Badge variant="outline" className={`bg-amber-50 text-amber-700 border-amber-200 ${baseClasses}`}>N</Badge>
+          <span className="absolute -top-7 left-1/2 -translate-x-1/2 hidden group-hover:block bg-black/80 text-white text-xs rounded py-1 px-2 whitespace-nowrap">No-Show</span>
+        </span>
+      );
     default:
-      return <Badge variant="outline">{status}</Badge>;
+      return <Badge variant="outline" className={baseClasses}>{status.charAt(0)}</Badge>;
   }
+};
+
+// Google badge component to match status badge style
+const getGoogleBadge = () => {
+  return (
+    <span className="group relative">
+      <Badge variant="outline" className="bg-blue-50/70 text-blue-600 border-blue-100 text-xs py-0.5 px-2 h-5 min-w-[2rem] inline-flex items-center justify-center font-medium">
+        <CalendarCheck className="h-2.5 w-2.5" />
+        <span className="ml-0.5">G</span>
+      </Badge>
+      <span className="absolute -top-7 left-1/2 -translate-x-1/2 hidden group-hover:block bg-black/80 text-white text-xs rounded py-1 px-2 whitespace-nowrap">Google Synced</span>
+    </span>
+  );
 };
 
 const Appointments = () => {
@@ -149,6 +185,7 @@ const Appointments = () => {
   const [dateFilter, setDateFilter] = useState('all');
   const [timeRangeFilter, setTimeRangeFilter] = useState('all');
   const [clinicSettings, setClinicSettings] = useState<any>(null);
+  const [googleSettings, setGoogleSettings] = useState<any>(null);
   const [isAddAppointmentOpen, setIsAddAppointmentOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   
@@ -163,6 +200,7 @@ const Appointments = () => {
     status: 'Scheduled',
     notes: '',
     provider: '',
+    syncedWithGoogle: false,
   });
 
   // Fetch appointments, patients, and clinic settings from Firebase
@@ -172,9 +210,10 @@ const Appointments = () => {
       
       setIsLoading(true);
       try {
-        // Load clinic settings
+        // Load user settings
         const settings = await getUserSettings(user.uid);
         setClinicSettings(settings.clinic);
+        setGoogleSettings(settings.google);
         
         // Load patients for the dropdown
         const patientData = await getPatients(user.uid);
@@ -258,11 +297,61 @@ const Appointments = () => {
         provider: clinicSettings?.clinicName || user.displayName || 'Provider',
       };
       
+      console.log('Creating appointment with sync flag:', appointmentToAdd.syncedWithGoogle);
+      
       // Create appointment in Firebase
       const appointmentId = await addAppointment(user.uid, appointmentToAdd);
       
       // Add appointment to local state with the returned ID
-      setAppointments([...appointments, { ...appointmentToAdd, id: appointmentId }]);
+      const newAppointmentWithId = { ...appointmentToAdd, id: appointmentId };
+      setAppointments([...appointments, newAppointmentWithId]);
+      
+      // Sync with Google Calendar if option is enabled
+      if (appointmentToAdd.syncedWithGoogle) {
+        console.log('Syncing new appointment to Google Calendar:', newAppointmentWithId);
+        setSyncingAppointmentId(appointmentId);
+        
+        // Make sure all required fields are present before syncing
+        const appointmentForSync: Appointment = {
+          ...newAppointmentWithId,
+          id: appointmentId,
+          // Ensure these fields are present and valid
+          date: newAppointmentWithId.date || format(new Date(), 'yyyy-MM-dd'),
+          time: newAppointmentWithId.time || format(new Date(), 'HH:mm'),
+          duration: newAppointmentWithId.duration || 30,
+          patientName: newAppointmentWithId.patientName || 'Patient',
+          provider: newAppointmentWithId.provider || 'Provider',
+          patientId: newAppointmentWithId.patientId || '',
+          type: newAppointmentWithId.type || 'Consultation',
+          status: newAppointmentWithId.status || 'Scheduled',
+        };
+        
+        const result = await syncAppointmentToGoogleCalendar(user.uid, appointmentForSync);
+        console.log('Google Calendar sync result:', result);
+        
+        if (result.success) {
+          toast({
+            title: "Appointment scheduled",
+            description: `Appointment for ${appointmentToAdd.patientName} has been scheduled and synced with Google Calendar.`
+          });
+        } else {
+          toast({
+            title: "Appointment scheduled",
+            description: `Appointment scheduled but Google Calendar sync failed: ${result.message}`,
+            variant: "destructive"
+          });
+        }
+        
+        // Refresh appointments to get the updated syncedWithGoogle status
+        const updatedAppointments = await getAppointments(user.uid);
+        setAppointments(updatedAppointments);
+        setSyncingAppointmentId(null);
+      } else {
+        toast({
+          title: "Appointment scheduled",
+          description: `Appointment for ${appointmentToAdd.patientName} has been scheduled.`
+        });
+      }
       
       setIsAddAppointmentOpen(false);
       setNewAppointment({
@@ -275,12 +364,9 @@ const Appointments = () => {
         status: 'Scheduled',
         notes: '',
         provider: '',
+        syncedWithGoogle: false,
       });
       
-      toast({
-        title: "Appointment scheduled",
-        description: `Appointment for ${appointmentToAdd.patientName} has been scheduled.`
-      });
     } catch (error) {
       console.error('Error adding appointment:', error);
       toast({
@@ -328,6 +414,10 @@ const Appointments = () => {
 
   // Update new appointment form fields
   const updateAppointmentField = (field: string, value: any) => {
+    if (field === 'syncedWithGoogle') {
+      console.log('Google Calendar sync toggled:', value);
+    }
+    
     setNewAppointment({
       ...newAppointment,
       [field]: value
@@ -521,6 +611,24 @@ const Appointments = () => {
                         className="min-h-[100px]"
                       />
                     </div>
+                    
+                    {googleSettings?.calendarEnabled && (
+                      <div className="space-y-2 pt-2 border-t border-border">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="sync-google-calendar">Sync with Google Calendar</Label>
+                            <p className="text-xs text-muted-foreground">
+                              Add this appointment to your Google Calendar automatically
+                            </p>
+                          </div>
+                          <Switch
+                            id="sync-google-calendar"
+                            checked={newAppointment.syncedWithGoogle || false}
+                            onCheckedChange={(checked) => updateAppointmentField('syncedWithGoogle', checked)}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <DialogFooter>
                     <DialogClose asChild>
@@ -590,14 +698,9 @@ const Appointments = () => {
                           <TableCell>{appointment.type}</TableCell>
                           <TableCell>{appointment.duration} minutes</TableCell>
                           <TableCell>
-                            <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-3">
                               {getStatusBadge(appointment.status)}
-                              {appointment.syncedWithGoogle && (
-                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs flex items-center gap-1 w-fit">
-                                  <CalendarCheck className="h-3 w-3" />
-                                  Google synced
-                                </Badge>
-                              )}
+                              {appointment.syncedWithGoogle && getGoogleBadge()}
                             </div>
                           </TableCell>
                           <TableCell className="text-right">

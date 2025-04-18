@@ -115,6 +115,79 @@ let loadingGIS = false;
 let currentTokenResponse: TokenResponse | null = null;
 let tokenExpiryTimer: NodeJS.Timeout | null = null;
 
+// Storage keys
+const TOKEN_STORAGE_KEY = 'google_calendar_token';
+const TOKEN_USER_ID_KEY = 'google_calendar_user_id';
+
+/**
+ * Save the token to localStorage
+ * @param userId User ID associated with the token
+ * @param tokenResponse The token to save
+ */
+const saveTokenToStorage = (userId: string, tokenResponse: TokenResponse) => {
+  try {
+    // Store the token in localStorage
+    localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokenResponse));
+    localStorage.setItem(TOKEN_USER_ID_KEY, userId);
+  } catch (error) {
+    console.error('Error saving token to storage:', error);
+  }
+};
+
+/**
+ * Load the token from localStorage
+ * @param userId User ID to validate the token belongs to the correct user
+ * @returns The stored token or null if not found or invalid
+ */
+const loadTokenFromStorage = (userId: string): TokenResponse | null => {
+  try {
+    // Check if the stored token belongs to the current user
+    const storedUserId = localStorage.getItem(TOKEN_USER_ID_KEY);
+    if (storedUserId !== userId) {
+      return null;
+    }
+    
+    // Get the token from localStorage
+    const tokenJson = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!tokenJson) {
+      return null;
+    }
+    
+    // Parse the token
+    const token = JSON.parse(tokenJson) as TokenResponse;
+    
+    // Verify the token has the required fields
+    if (!token.access_token || !token.expires_at) {
+      return null;
+    }
+    
+    // Check if the token is expired
+    if (token.expires_at < Date.now()) {
+      // Clear expired token
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(TOKEN_USER_ID_KEY);
+      return null;
+    }
+    
+    return token;
+  } catch (error) {
+    console.error('Error loading token from storage:', error);
+    return null;
+  }
+};
+
+/**
+ * Clear the token from localStorage
+ */
+const clearStoredToken = () => {
+  try {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(TOKEN_USER_ID_KEY);
+  } catch (error) {
+    console.error('Error clearing token from storage:', error);
+  }
+};
+
 // Required scopes for Google Calendar
 const CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/calendar', 
@@ -251,13 +324,16 @@ export const initGoogleCalendarAPI = async (): Promise<boolean> => {
  * Setup token refresh before expiration
  * @param tokenResponse The token response object
  */
-const setupTokenRefresh = (tokenClient: any, tokenResponse: TokenResponse) => {
+const setupTokenRefresh = (tokenClient: any, tokenResponse: TokenResponse, userId: string) => {
   // Store the token response with expiration time
   const expiresAt = Date.now() + (tokenResponse.expires_in * 1000);
   currentTokenResponse = {
     ...tokenResponse,
     expires_at: expiresAt
   };
+  
+  // Save token to localStorage for persistence
+  saveTokenToStorage(userId, currentTokenResponse);
 
   // Clear any existing timer
   if (tokenExpiryTimer) {
@@ -344,6 +420,20 @@ export const authenticateWithGoogle = async (userId: string): Promise<boolean> =
       return false;
     }
 
+    // First check if we have a valid stored token
+    const storedToken = loadTokenFromStorage(userId);
+    if (storedToken && storedToken.access_token) {
+      // Apply the stored token
+      applyAccessToken(storedToken.access_token);
+      currentTokenResponse = storedToken;
+      
+      // Initialize the GAPI client
+      await initGapiClient(settings.google.clientId, settings.google.apiKey);
+      
+      // Since we have a valid token, we can skip the authentication prompt
+      return true;
+    }
+
     // Return a promise that resolves when auth is complete
     return new Promise((resolve) => {
       // First initialize the gapi client
@@ -364,7 +454,7 @@ export const authenticateWithGoogle = async (userId: string): Promise<boolean> =
               applyAccessToken(tokenResponse.access_token);
               
               // Setup automatic token refresh
-              setupTokenRefresh(tokenClient, tokenResponse);
+              setupTokenRefresh(tokenClient, tokenResponse, userId);
 
               // Update the apiKeyConfigured flag if successful
               await updateSettingsModule(userId, 'google', {
@@ -428,6 +518,15 @@ export const ensureGoogleCalendarReady = async (userId: string): Promise<boolean
     if (!settings.google.clientId) {
       console.error('Google Calendar Client ID not configured');
       return false;
+    }
+
+    // First try to load a token from storage
+    if (!currentTokenResponse) {
+      const storedToken = loadTokenFromStorage(userId);
+      if (storedToken) {
+        currentTokenResponse = storedToken;
+        applyAccessToken(storedToken.access_token);
+      }
     }
 
     // Check if we already have a valid token
@@ -621,6 +720,9 @@ export const revokeGoogleCalendarAccess = async (userId: string): Promise<boolea
       });
       currentTokenResponse = null;
     }
+    
+    // Clear the stored token
+    clearStoredToken();
     
     // Update user settings
     if (userId) {

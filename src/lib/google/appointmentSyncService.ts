@@ -51,11 +51,15 @@ export const syncAppointmentToGoogleCalendar = async (
   appointment: Appointment
 ): Promise<{ success: boolean; message: string }> => {
   try {
+    console.log('Starting Google Calendar sync for appointment:', appointment);
+    
     // Get user settings to check if Google Calendar is enabled
     const settings = await getUserSettings(userId);
+    console.log('User settings for Google Calendar:', settings.google);
     
     // Check if Google Calendar is enabled
     if (!settings.google.calendarEnabled) {
+      console.log('Google Calendar integration is not enabled');
       return {
         success: false,
         message: 'Google Calendar integration is not enabled. Please enable it in settings first.',
@@ -64,6 +68,7 @@ export const syncAppointmentToGoogleCalendar = async (
 
     // Check if client ID is configured
     if (!settings.google.clientId) {
+      console.log('Google Calendar Client ID is not configured');
       return {
         success: false,
         message: 'Google Calendar Client ID is not configured. Please add your Google OAuth Client ID in settings first.',
@@ -72,26 +77,33 @@ export const syncAppointmentToGoogleCalendar = async (
 
     // Authenticate with Google if needed
     if (!settings.google.apiKeyConfigured) {
+      console.log('Attempting to authenticate with Google Calendar');
       const authenticated = await authenticateWithGoogle(userId);
       if (!authenticated) {
+        console.log('Failed to authenticate with Google Calendar');
         return {
           success: false,
           message: 'Failed to authenticate with Google Calendar. Please check your credentials in settings.',
         };
       }
+      console.log('Successfully authenticated with Google Calendar');
     }
 
     // Convert appointment to calendar event
     const calendarEvent = convertAppointmentToCalendarEvent(
       appointment,
-      settings.location.timezone || 'America/New_York'
+      settings.location?.timezone || 'America/New_York'
     );
+    console.log('Converted appointment to calendar event:', calendarEvent);
 
     // Sync with Google Calendar
+    console.log('Syncing event with Google Calendar...');
     const googleEventId = await syncAppointmentWithGoogleCalendar(userId, calendarEvent);
+    console.log('Google Calendar sync result, event ID:', googleEventId);
 
     // If sync was successful, update the appointment with the Google Event ID
     if (googleEventId) {
+      console.log('Updating appointment with Google Event ID');
       await updateAppointmentWithGoogleEventId(userId, appointment.id || '', googleEventId);
       
       return {
@@ -100,6 +112,7 @@ export const syncAppointmentToGoogleCalendar = async (
       };
     }
 
+    console.log('Failed to sync with Google Calendar - no event ID returned');
     return {
       success: false,
       message: 'Failed to sync appointment with Google Calendar.',
