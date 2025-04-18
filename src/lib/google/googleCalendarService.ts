@@ -8,10 +8,12 @@ declare global {
       load: (apiName: string, callback: () => void) => void;
       client: {
         init: (params: {
-          clientId: string;
-          scope: string;
+          clientId?: string; 
+          apiKey?: string;
+          scope?: string;
           discoveryDocs?: string[];
         }) => Promise<any>;
+        setToken: (token: string) => void;
         calendar: {
           events: {
             update: (params: any) => Promise<any>;
@@ -30,9 +32,13 @@ declare global {
             callback: (response: any) => void;
             auto_select?: boolean;
             cancel_on_tap_outside?: boolean;
+            context?: string;
+            ux_mode?: string;
+            use_fedcm_for_prompt?: boolean;
           }) => void;
           prompt: (callback?: (notification: any) => void) => void;
           renderButton: (element: HTMLElement, options: any) => void;
+          revoke: (hint: string, callback: () => void) => void;
         };
         oauth2: {
           initTokenClient: (params: {
@@ -40,9 +46,21 @@ declare global {
             scope: string;
             callback: (tokenResponse: any) => void;
             error_callback?: (error: any) => void;
+            included_grants?: string[];
+            enable_serial_consent?: boolean;
           }) => {
-            requestAccessToken: (overrideConfig?: { prompt?: string }) => void;
+            requestAccessToken: (overrideConfig?: { 
+              prompt?: string;
+              hint?: string;
+              enable_granular_consent?: boolean;
+            }) => void;
           };
+          hasGrantedAllScopes: (
+            tokenResponse: { scope: string },
+            ...scopes: string[]
+          ) => boolean;
+          revoke: (accessToken: string, callback?: () => void) => void;
+          Token: any;
         };
       };
     };
@@ -54,6 +72,15 @@ export interface GoogleCalendarConfig {
   apiKey: string;
   clientId: string;
   calendarId: string;
+}
+
+// Token response type
+export interface TokenResponse {
+  access_token: string;
+  expires_in: number;
+  scope: string;
+  token_type: string;
+  expires_at?: number;
 }
 
 // Appointment event type for Google Calendar
@@ -83,8 +110,24 @@ export interface CalendarEvent {
   };
 }
 
-// Global variable to track if we're in the process of loading Google Identity Services
+// Global variables for authentication state
 let loadingGIS = false;
+let currentTokenResponse: TokenResponse | null = null;
+let tokenExpiryTimer: NodeJS.Timeout | null = null;
+
+// Required scopes for Google Calendar
+const CALENDAR_SCOPES = [
+  'https://www.googleapis.com/auth/calendar', 
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile'
+];
+const SCOPES_STRING = CALENDAR_SCOPES.join(' ');
+
+// Google API discovery document URLs
+const DISCOVERY_DOCS = [
+  'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'
+];
 
 /**
  * Load Google Identity Services script
@@ -205,6 +248,72 @@ export const initGoogleCalendarAPI = async (): Promise<boolean> => {
 };
 
 /**
+ * Setup token refresh before expiration
+ * @param tokenResponse The token response object
+ */
+const setupTokenRefresh = (tokenClient: any, tokenResponse: TokenResponse) => {
+  // Store the token response with expiration time
+  const expiresAt = Date.now() + (tokenResponse.expires_in * 1000);
+  currentTokenResponse = {
+    ...tokenResponse,
+    expires_at: expiresAt
+  };
+
+  // Clear any existing timer
+  if (tokenExpiryTimer) {
+    clearTimeout(tokenExpiryTimer);
+  }
+
+  // Set a timer to refresh the token 5 minutes before it expires
+  const timeToRefresh = (tokenResponse.expires_in - 300) * 1000;
+  if (timeToRefresh > 0) {
+    tokenExpiryTimer = setTimeout(() => {
+      tokenClient.requestAccessToken({ prompt: '' });
+    }, timeToRefresh);
+  }
+};
+
+/**
+ * Apply the access token to the gapi client
+ * @param accessToken The access token to apply
+ */
+const applyAccessToken = (accessToken: string) => {
+  if (window.gapi?.client?.setToken) {
+    // @ts-ignore - Type incompatibility with setToken parameter
+    window.gapi.client.setToken({ access_token: accessToken });
+  }
+};
+
+/**
+ * Initialize the Google API client
+ * @param clientId OAuth client ID
+ * @param apiKey API key (optional)
+ */
+const initGapiClient = async (clientId: string, apiKey?: string) => {
+  return new Promise<void>((resolve, reject) => {
+    window.gapi.load('client', async () => {
+      try {
+        const params: any = {
+          discoveryDocs: DISCOVERY_DOCS
+        };
+        
+        // Add API key if provided
+        if (apiKey) {
+          params.apiKey = apiKey;
+        }
+        
+        // Initialize the client
+        await window.gapi.client.init(params);
+        resolve();
+      } catch (error) {
+        console.error('Error initializing Google API client:', error);
+        reject(error);
+      }
+    });
+  });
+};
+
+/**
  * Authenticate with Google Calendar API using user-specific credentials
  * @param userId User ID to fetch credentials from settings
  */
@@ -237,19 +346,13 @@ export const authenticateWithGoogle = async (userId: string): Promise<boolean> =
 
     // Return a promise that resolves when auth is complete
     return new Promise((resolve) => {
-      window.gapi.load('client', async () => {
-        try {
-          // Initialize the gapi client
-          await window.gapi.client.init({
-            clientId: settings.google.clientId,
-            scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
-          });
-          
-          // Get access token using Google Identity Services
+      // First initialize the gapi client
+      initGapiClient(settings.google.clientId, settings.google.apiKey)
+        .then(() => {
+          // Now initialize the token client with GIS
           const tokenClient = window.google.accounts.oauth2.initTokenClient({
             client_id: settings.google.clientId,
-            scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
+            scope: SCOPES_STRING,
             callback: async (tokenResponse) => {
               if (tokenResponse.error) {
                 console.error('Error getting access token:', tokenResponse);
@@ -257,11 +360,18 @@ export const authenticateWithGoogle = async (userId: string): Promise<boolean> =
                 return;
               }
 
+              // Apply the token to the gapi client
+              applyAccessToken(tokenResponse.access_token);
+              
+              // Setup automatic token refresh
+              setupTokenRefresh(tokenClient, tokenResponse);
+
               // Update the apiKeyConfigured flag if successful
               await updateSettingsModule(userId, 'google', {
                 ...settings.google,
                 apiKeyConfigured: true
               });
+              
               resolve(true);
             },
             error_callback: (error) => {
@@ -271,17 +381,33 @@ export const authenticateWithGoogle = async (userId: string): Promise<boolean> =
           });
           
           // Request an access token
-          tokenClient.requestAccessToken({ prompt: 'consent' });
-        } catch (error) {
-          console.error('Error authenticating with Google:', error);
+          // Use an empty prompt for existing users who have already granted permission
+          tokenClient.requestAccessToken({
+            prompt: settings.google.apiKeyConfigured ? '' : 'consent',
+          });
+        })
+        .catch((error) => {
+          console.error('Failed to initialize gapi client:', error);
           resolve(false);
-        }
-      });
+        });
     });
   } catch (error) {
     console.error('Error authenticating with Google:', error);
     return false;
   }
+};
+
+/**
+ * Check if the current token is valid
+ */
+const isTokenValid = (): boolean => {
+  if (!currentTokenResponse || !currentTokenResponse.expires_at) {
+    return false;
+  }
+  
+  // Return true if the token is valid for at least 5 more minutes
+  const fiveMinutesFromNow = Date.now() + (5 * 60 * 1000);
+  return currentTokenResponse.expires_at > fiveMinutesFromNow;
 };
 
 /**
@@ -302,6 +428,11 @@ export const ensureGoogleCalendarReady = async (userId: string): Promise<boolean
     if (!settings.google.clientId) {
       console.error('Google Calendar Client ID not configured');
       return false;
+    }
+
+    // Check if we already have a valid token
+    if (isTokenValid() && window.gapi?.client?.calendar) {
+      return true;
     }
 
     // Initialize and authenticate with Google API
@@ -377,7 +508,7 @@ export const syncAppointmentWithGoogleCalendar = async (
     // Update last sync date
     await updateSettingsModule(userId, 'google', {
       ...settings.google,
-      lastSyncDate: new Date(),
+      lastSyncDate: new Date().toISOString(),
     });
 
     return response.result.id;
@@ -397,14 +528,15 @@ export const deleteAppointmentFromGoogleCalendar = async (
   eventId: string
 ): Promise<boolean> => {
   try {
+    // Ensure Google Calendar API is ready
+    const isReady = await ensureGoogleCalendarReady(userId);
+    if (!isReady) {
+      return false;
+    }
+    
     // Get user settings
     const settings = await getUserSettings(userId);
     
-    // Check if Google Calendar is enabled
-    if (!settings.google.calendarEnabled || !settings.google.apiKeyConfigured) {
-      return false;
-    }
-
     // Use the user's calendar ID
     const calendarId = settings.google.calendarId || 'primary';
 
@@ -417,7 +549,7 @@ export const deleteAppointmentFromGoogleCalendar = async (
     // Update last sync date
     await updateSettingsModule(userId, 'google', {
       ...settings.google,
-      lastSyncDate: new Date(),
+      lastSyncDate: new Date().toISOString(),
     });
 
     return true;
@@ -441,14 +573,15 @@ export const getGoogleCalendarEvents = async (
   } = {}
 ): Promise<CalendarEvent[]> => {
   try {
+    // Ensure Google Calendar API is ready
+    const isReady = await ensureGoogleCalendarReady(userId);
+    if (!isReady) {
+      return [];
+    }
+    
     // Get user settings
     const settings = await getUserSettings(userId);
     
-    // Check if Google Calendar is enabled
-    if (!settings.google.calendarEnabled || !settings.google.apiKeyConfigured) {
-      return [];
-    }
-
     // Use the user's calendar ID
     const calendarId = settings.google.calendarId || 'primary';
 
@@ -466,5 +599,41 @@ export const getGoogleCalendarEvents = async (
   } catch (error) {
     console.error('Error getting Google Calendar events:', error);
     return [];
+  }
+};
+
+/**
+ * Revoke Google Calendar access and clean up
+ * @param userId User ID
+ */
+export const revokeGoogleCalendarAccess = async (userId: string): Promise<boolean> => {
+  try {
+    // Clear any token refresh timer
+    if (tokenExpiryTimer) {
+      clearTimeout(tokenExpiryTimer);
+      tokenExpiryTimer = null;
+    }
+    
+    // Revoke the token if we have one
+    if (currentTokenResponse?.access_token) {
+      window.google.accounts.oauth2.revoke(currentTokenResponse.access_token, () => {
+        console.log('Google Calendar access token revoked');
+      });
+      currentTokenResponse = null;
+    }
+    
+    // Update user settings
+    if (userId) {
+      const settings = await getUserSettings(userId);
+      await updateSettingsModule(userId, 'google', {
+        ...settings.google,
+        apiKeyConfigured: false
+      });
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error revoking Google Calendar access:', error);
+    return false;
   }
 }; 

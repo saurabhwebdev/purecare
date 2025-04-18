@@ -338,16 +338,6 @@ const Appointments = () => {
   const handleSyncToGoogleCalendar = async (appointment: Appointment) => {
     if (!user || !appointment.id) return;
     
-    // Show warning toast that feature is unavailable
-    toast({
-      title: "Feature Unavailable",
-      description: "Google Calendar integration is currently under development. Please check back later when this feature is fully implemented.",
-      variant: "destructive",
-    });
-    
-    return;
-    
-    /* Original implementation - commented out until feature is ready
     try {
       setIsLoading(true);
       setSyncingAppointmentId(appointment.id);
@@ -383,7 +373,6 @@ const Appointments = () => {
       setIsLoading(false);
       setSyncingAppointmentId(null);
     }
-    */
   };
 
   return (
@@ -553,14 +542,6 @@ const Appointments = () => {
       </div>
 
       <div className="container mx-auto px-4 py-6">
-        <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-5 w-5" />
-          <AlertTitle>Google Calendar Integration Unavailable</AlertTitle>
-          <AlertDescription>
-            The Google Calendar sync feature is currently under development and testing. Please do not use this feature at this time. We are working to resolve authentication issues and will notify you when it's ready.
-          </AlertDescription>
-        </Alert>
-
         <div className="rounded-md shadow bg-background">
           <div className="grid gap-4 p-4">
             <div className="rounded-lg border border-border bg-card">
@@ -654,23 +635,19 @@ const Appointments = () => {
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
                                   onClick={() => handleSyncToGoogleCalendar(appointment)}
-                                  disabled={true}
-                                  className="text-muted-foreground"
+                                  disabled={appointment.syncedWithGoogle || syncingAppointmentId === appointment.id}
                                 >
                                   {syncingAppointmentId === appointment.id ? (
                                     <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
                                   ) : (
-                                    <CalendarCheck className="h-4 w-4 mr-2 text-muted" />
+                                    <CalendarCheck className="h-4 w-4 mr-2 text-blue-600" />
                                   )}
                                   {syncingAppointmentId === appointment.id 
                                     ? 'Syncing...' 
-                                    : 'Google Calendar sync unavailable'
+                                    : appointment.syncedWithGoogle
+                                      ? 'Already synced'
+                                      : 'Sync to Google Calendar'
                                   }
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem disabled className="text-red-500 text-xs italic">
-                                  <AlertCircle className="h-3 w-3 mr-2" />
-                                  Feature currently in development
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
