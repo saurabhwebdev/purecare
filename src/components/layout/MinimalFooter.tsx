@@ -20,6 +20,9 @@ const MinimalFooter = () => {
             <Link to="/contact" className="text-xs text-foreground/70 hover:text-foreground transition-colors">
               Contact
             </Link>
+            <Link to="/feedback" className="text-xs text-foreground/70 hover:text-foreground transition-colors">
+              Feedback
+            </Link>
           </div>
         </div>
       </div>

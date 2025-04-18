@@ -35,6 +35,7 @@ import InvoiceEdit from "./pages/InvoiceEdit";
 
 // Public Pages
 import Contact from "./pages/Contact";
+import Feedback from "./pages/Feedback";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import Pricing from "./pages/Pricing";
@@ -59,6 +60,7 @@ const App = () => (
             
             {/* Public Pages */}
             <Route path="/contact" element={<Contact />} />
+            <Route path="/feedback" element={<Feedback />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/pricing" element={<Pricing />} />
