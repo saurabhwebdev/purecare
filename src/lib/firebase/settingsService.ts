@@ -49,6 +49,21 @@ export interface AppearanceSettings {
   compactMode: boolean;
 }
 
+export interface ProviderSettings {
+  providers: Provider[];
+  defaultProvider?: string | null;
+}
+
+export interface Provider {
+  id: string;
+  name: string;
+  title: string;
+  specialty: string;
+  email: string;
+  phone: string;
+  profileImage?: string;
+}
+
 export interface GoogleSettings {
   calendarEnabled: boolean;
   calendarId: string;
@@ -77,6 +92,7 @@ export interface UserSettings {
   financial: FinancialSettings;
   notifications: NotificationSettings;
   appearance: AppearanceSettings;
+  providers: ProviderSettings;
   google: GoogleSettings;
   gmail?: GmailSettings;
   lastUpdated?: Date;
@@ -125,6 +141,10 @@ export const defaultSettings: UserSettings = {
   appearance: {
     darkMode: false,
     compactMode: false,
+  },
+  providers: {
+    providers: [],
+    defaultProvider: null
   },
   google: {
     calendarEnabled: false,

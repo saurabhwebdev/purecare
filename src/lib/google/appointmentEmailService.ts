@@ -33,6 +33,30 @@ export const sendAppointmentEmail = async (
     const appointmentTime = appointment.time;
     const appointmentEndTime = calculateEndTime(appointment.time, appointment.duration);
     
+    // Find provider information if available
+    let providerInfo = null;
+    if (settings.providers && settings.providers.providers && settings.providers.providers.length > 0) {
+      // Try to find the provider by name (case insensitive)
+      providerInfo = settings.providers.providers.find(
+        p => p.name.toLowerCase() === appointment.provider.toLowerCase()
+      );
+      
+      // If exact match is not found, try to find a partial match
+      if (!providerInfo) {
+        providerInfo = settings.providers.providers.find(
+          p => appointment.provider.toLowerCase().includes(p.name.toLowerCase()) || 
+               p.name.toLowerCase().includes(appointment.provider.toLowerCase())
+        );
+      }
+      
+      // If still not found and there's a default provider, use that
+      if (!providerInfo && settings.providers.defaultProvider) {
+        providerInfo = settings.providers.providers.find(
+          p => p.id === settings.providers.defaultProvider
+        );
+      }
+    }
+    
     // Build email content
     const emailSubject = `Appointment Confirmation: ${appointmentDate} at ${appointmentTime}`;
     
@@ -43,6 +67,13 @@ export const sendAppointmentEmail = async (
       email: settings.clinic?.email || 'N/A',
       website: settings.clinic?.website || '',
     };
+    
+    // Get provider name with title if available
+    const providerName = providerInfo 
+      ? `${providerInfo.title && providerInfo.title !== 'none' ? providerInfo.title + ' ' : ''}${providerInfo.name}`.trim()
+      : appointment.provider;
+      
+    const providerSpecialty = providerInfo?.specialty || '';
     
     // Build email HTML content
     const emailHtml = `
@@ -57,192 +88,377 @@ export const sendAppointmentEmail = async (
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
       line-height: 1.6; 
       color: #333; 
-      max-width: 600px; 
-      margin: 0 auto; 
-      padding: 20px;
-      background-color: #f9fafb;
+      background-color: #f0f2f5;
+      margin: 0;
+      padding: 0;
     }
-    .container {
+    .email-container {
+      max-width: 600px; 
+      margin: 20px auto;
+      background-color: transparent;
+      padding: 0 15px;
+    }
+    .slip-container {
       background-color: #ffffff;
-      border-radius: 12px;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-      padding: 30px;
+      border-radius: 20px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      overflow: hidden;
       margin-bottom: 20px;
     }
     .header { 
+      background-color: #4f46e5;
+      color: white;
       text-align: center; 
-      margin-bottom: 30px; 
-      border-bottom: 2px solid #f3f4f6;
-      padding-bottom: 20px;
+      padding: 35px 20px 45px;
+      position: relative;
+    }
+    .ticket-tear {
+      height: 20px;
+      background: linear-gradient(45deg, #ffffff 25%, transparent 25%, transparent 75%, #ffffff 75%),
+                  linear-gradient(45deg, #ffffff 25%, transparent 25%, transparent 75%, #ffffff 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 10px 10px;
+      background-color: #4f46e5;
+      position: relative;
+      top: -2px;
     }
     .logo { 
       font-size: 28px; 
-      font-weight: bold; 
-      color: #4f46e5; 
-      margin-bottom: 10px; 
+      font-weight: bold;
+      margin-bottom: 15px; 
+      letter-spacing: 0.5px;
     }
-    .appointment-badge {
+    .appointment-type {
       display: inline-block;
-      background-color: #4f46e5;
-      color: white;
-      padding: 6px 12px;
-      border-radius: 20px;
+      background-color: rgba(255,255,255,0.25);
+      padding: 8px 16px;
+      border-radius: 50px;
       font-size: 14px;
-      margin-bottom: 10px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .content {
+      padding: 35px;
     }
     .greeting {
       font-size: 18px;
+      margin-top: 0;
       margin-bottom: 20px;
     }
-    .appointment-details { 
-      background-color: #f9fafb; 
-      border-radius: 10px;
-      padding: 25px; 
-      margin-bottom: 25px; 
+    .appointment-intro {
+      margin-bottom: 30px;
+      color: #4b5563;
     }
-    .details-row { 
-      display: flex; 
-      margin-bottom: 15px;
+    .date-time-section {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 30px;
+      gap: 20px;
+    }
+    .date-box, .time-box {
+      background-color: #f8fafc;
+      border-radius: 16px;
+      padding: 25px 20px;
+      width: 100%;
+      box-sizing: border-box;
+      text-align: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+    .date-box h3, .time-box h3 {
+      margin: 0 0 12px 0;
+      color: #4f46e5;
+      font-size: 16px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .date-box p, .time-box p {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+      color: #1f2937;
+    }
+    .time-box p span {
+      font-size: 14px;
+      color: #64748b;
+      display: block;
+      margin-top: 5px;
+      font-weight: normal;
+    }
+    .details-section {
+      margin-bottom: 30px;
+      background-color: #f8fafc;
+      border-radius: 16px;
+      padding: 25px;
+      border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+    .details-section:last-of-type {
+      margin-bottom: 35px;
+    }
+    .details-section h3 {
+      margin: 0 0 20px 0;
+      font-size: 16px;
+      color: #0f172a;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e2e8f0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+    .detail-row {
+      display: flex;
+      margin-bottom: 16px;
       align-items: flex-start;
     }
-    .details-label { 
-      font-weight: 600; 
-      width: 130px; 
-      color: #6b7280;
+    .detail-row:last-child {
+      margin-bottom: 0;
     }
-    .details-value { 
-      flex: 1; 
+    .detail-icon {
+      color: #4f46e5;
+      font-size: 18px;
+      margin-right: 15px;
+      min-width: 24px;
+      text-align: center;
     }
-    .patient-info { 
-      margin-bottom: 25px; 
-      background-color: #f9fafb;
-      border-radius: 10px;
-      padding: 20px;
+    .detail-content {
+      flex: 1;
+    }
+    .detail-content p {
+      margin: 0;
+      color: #1f2937;
+      font-size: 15px;
+    }
+    .detail-label {
+      font-weight: 600;
+      margin-right: 5px;
+    }
+    .button-section {
+      text-align: center;
+      margin: 35px 0;
+    }
+    .button {
+      display: inline-block;
+      background-color: #4f46e5; 
+      color: white !important; 
+      padding: 16px 32px; 
+      text-decoration: none; 
+      border-radius: 12px; 
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: 0.3px;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+      border: none;
+      cursor: pointer;
+    }
+    .button:hover {
+      background-color: #4338ca;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 15px rgba(79, 70, 229, 0.25);
+    }
+    .button-calendar {
+      background-color: #10b981;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+    }
+    .button-calendar:hover {
+      background-color: #059669;
+      box-shadow: 0 6px 15px rgba(16, 185, 129, 0.25);
     }
     .clinic-info { 
+      background-color: #f8fafc;
+      border-radius: 16px;
+      padding: 25px;
       font-size: 14px; 
-      color: #6b7280; 
-      text-align: center; 
-      margin-top: 30px; 
-      padding-top: 20px; 
-      border-top: 1px solid #e5e7eb; 
+      color: #64748b; 
+      margin-top: 20px;
+      text-align: center;
+      border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+    .clinic-info p {
+      margin: 0 0 10px 0;
+    }
+    .clinic-info p:last-child {
+      margin-bottom: 0;
+    }
+    .clinic-info a {
+      color: #4f46e5;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+    .clinic-info a:hover {
+      color: #4338ca;
+      text-decoration: underline;
     }
     .footer { 
       text-align: center; 
       font-size: 12px; 
-      color: #9ca3af; 
-      margin-top: 30px;
-      padding-top: 20px;
-      border-top: 1px solid #e5e7eb;
+      color: #94a3b8; 
+      margin-top: 25px;
+      padding: 0 20px 20px;
     }
-    .button { 
-      display: inline-block;
-      background-color: #4f46e5; 
-      color: white !important; 
-      padding: 12px 24px; 
-      text-decoration: none; 
-      border-radius: 6px; 
-      font-weight: 600;
-      margin-right: 10px;
-      transition: background-color 0.3s;
+    .footer p {
+      margin: 0 0 8px 0;
     }
-    .button:hover {
-      background-color: #4338ca;
+    .footer p:last-child {
+      margin-bottom: 0;
     }
-    .button-calendar {
-      background-color: #10b981;
-    }
-    .button-calendar:hover {
-      background-color: #059669;
-    }
-    .button-section {
+    .appointment-barcode {
       text-align: center;
-      margin: 30px 0;
+      margin: 35px 0;
+      opacity: 0.9;
     }
-    .icon {
-      display: inline-block;
-      vertical-align: middle;
-      margin-right: 8px;
-      width: 20px;
-      height: 20px;
-      background-repeat: no-repeat;
-      background-position: center;
+    .appointment-barcode img {
+      max-width: 80%;
+      height: auto;
+      border-radius: 8px;
+      padding: 15px;
+      background-color: white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .appointment-barcode p {
+      margin: 10px 0 0 0;
+      font-size: 13px;
+      color: #64748b;
+      letter-spacing: 0.5px;
     }
     @media (max-width: 600px) {
-      .details-row { flex-direction: column; }
-      .details-label { width: 100%; margin-bottom: 5px; }
+      .email-container {
+        margin: 0;
+        width: 100%;
+        padding: 0;
+      }
+      .slip-container {
+        border-radius: 0;
+      }
+      .content {
+        padding: 25px 20px;
+      }
+      .date-time-section {
+        flex-direction: column;
+        gap: 15px;
+      }
+      .date-box, .time-box {
+        width: 100%;
+      }
+      .details-section, .clinic-info {
+        padding: 20px;
+      }
+      .button {
+        display: block;
+        width: 100%;
+      }
+      .appointment-barcode img {
+        max-width: 90%;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <div class="logo">${clinicInfo.name}</div>
-      <div class="appointment-badge">Appointment Confirmation</div>
-    </div>
-    
-    <p class="greeting">Hello ${patient?.name || appointment.patientName},</p>
-    
-    <p>Your appointment has been successfully scheduled with <strong>${appointment.provider}</strong> at ${clinicInfo.name}.</p>
-    
-    <div class="appointment-details">
-      <div class="details-row">
-        <div class="details-label">📅 Date:</div>
-        <div class="details-value">${appointmentDate}</div>
+  <div class="email-container">
+    <div class="slip-container">
+      <div class="header">
+        <div class="logo">${clinicInfo.name}</div>
+        <div class="appointment-type">${appointment.type}</div>
       </div>
-      <div class="details-row">
-        <div class="details-label">⏰ Time:</div>
-        <div class="details-value">${appointmentTime} - ${appointmentEndTime}</div>
+      
+      <div class="ticket-tear"></div>
+      
+      <div class="content">
+        <p class="greeting">Hello <strong>${patient?.name || appointment.patientName}</strong>,</p>
+        
+        <p class="appointment-intro">Your appointment has been confirmed with the following details:</p>
+        
+        <div class="date-time-section">
+          <div class="date-box">
+            <h3>Date</h3>
+            <p>${appointmentDate}</p>
+          </div>
+          <div class="time-box">
+            <h3>Time</h3>
+            <p>${appointmentTime} <span>${appointment.duration} mins</span></p>
+          </div>
+        </div>
+        
+        <div class="details-section">
+          <h3>Provider</h3>
+          <div class="detail-row">
+            <div class="detail-icon">🩺</div>
+            <div class="detail-content">
+              <p><span class="detail-label">${providerInfo?.title && providerInfo.title !== 'none' ? providerInfo.title : ''}</span> ${providerInfo?.name || appointment.provider}</p>
+              ${providerSpecialty ? `<p style="font-size: 13px; color: #64748b; margin-top: 4px;">${providerSpecialty}</p>` : ''}
+            </div>
+          </div>
+        </div>
+        
+        ${appointment.notes ? `
+        <div class="details-section">
+          <h3>Appointment Notes</h3>
+          <div class="detail-row">
+            <div class="detail-icon">📝</div>
+            <div class="detail-content">
+              <p>${appointment.notes}</p>
+            </div>
+          </div>
+        </div>` : ''}
+        
+        <div class="details-section">
+          <h3>Location</h3>
+          <div class="detail-row">
+            <div class="detail-icon">📍</div>
+            <div class="detail-content">
+              <p>${clinicInfo.address}</p>
+            </div>
+          </div>
+        </div>
+        
+        ${patient ? `
+        <div class="details-section">
+          <h3>Patient Information</h3>
+          <div class="detail-row">
+            <div class="detail-icon">👤</div>
+            <div class="detail-content">
+              <p><span class="detail-label">Name:</span>${patient.name}</p>
+            </div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-icon">📞</div>
+            <div class="detail-content">
+              <p><span class="detail-label">Phone:</span>${patient.phone}</p>
+            </div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-icon">✉️</div>
+            <div class="detail-content">
+              <p><span class="detail-label">Email:</span>${patient.email}</p>
+            </div>
+          </div>
+        </div>` : ''}
+        
+        <div class="button-section">
+          <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`Appointment with ${providerName}`)}&dates=${formatDateTimeForGoogleCalendar(appointment.date, appointment.time, appointment.duration)}&details=${encodeURIComponent(`Appointment Type: ${appointment.type}\nProvider: ${providerName}\n${providerSpecialty ? `Specialty: ${providerSpecialty}\n` : ''}${appointment.notes ? `Notes: ${appointment.notes}` : ''}`)}&location=${encodeURIComponent(clinicInfo.address)}" class="button button-calendar" target="_blank">
+            Add to Calendar
+          </a>
+        </div>
+        
+        <div class="appointment-barcode">
+          <img src="https://barcode.tec-it.com/barcode.ashx?data=APP-${appointment.id.substring(0,10)}&code=Code128&multiplebarcodes=false&translate-esc=false&unit=Fit&dpi=96&imagetype=Gif&rotation=0&color=%23000000&bgcolor=%23ffffff&codepage=&qunit=Mm&quiet=0" alt="Appointment Barcode">
+          <p>Appointment ID: ${appointment.id.substring(0,10)}</p>
+        </div>
+        
+        <div class="clinic-info">
+          <p><strong>Need to reschedule?</strong></p>
+          <p>Please contact us at ${clinicInfo.phone} or ${clinicInfo.email}</p>
+          ${clinicInfo.website ? `<p><a href="${clinicInfo.website}">${clinicInfo.website}</a></p>` : ''}
+        </div>
       </div>
-      <div class="details-row">
-        <div class="details-label">⏱️ Duration:</div>
-        <div class="details-value">${appointment.duration} minutes</div>
-      </div>
-      <div class="details-row">
-        <div class="details-label">🏥 Type:</div>
-        <div class="details-value">${appointment.type}</div>
-      </div>
-      <div class="details-row">
-        <div class="details-label">👨‍⚕️ Provider:</div>
-        <div class="details-value">${appointment.provider}</div>
-      </div>
-      ${appointment.notes ? `
-      <div class="details-row">
-        <div class="details-label">📝 Notes:</div>
-        <div class="details-value">${appointment.notes}</div>
-      </div>` : ''}
-    </div>
-
-    <div class="button-section">
-      <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`Appointment with ${appointment.provider}`)}&dates=${formatDateTimeForGoogleCalendar(appointment.date, appointment.time, appointment.duration)}&details=${encodeURIComponent(`Appointment Type: ${appointment.type}\nProvider: ${appointment.provider}\n${appointment.notes ? `Notes: ${appointment.notes}` : ''}`)}&location=${encodeURIComponent(clinicInfo.address)}" class="button button-calendar" target="_blank">
-        Add to Calendar
-      </a>
-    </div>
-
-    ${patient ? `
-    <div class="patient-info">
-      <p style="margin-top: 0;"><strong>Your Information:</strong></p>
-      <p style="margin-bottom: 0;">👤 Name: ${patient.name}<br>
-      📞 Phone: ${patient.phone}<br>
-      ✉️ Email: ${patient.email}</p>
-    </div>` : ''}
-    
-    <p><strong>📍 Clinic Location:</strong><br>
-    ${clinicInfo.address}</p>
-    
-    <p>If you need to reschedule or cancel your appointment, please contact us at ${clinicInfo.phone} or ${clinicInfo.email}.</p>
-    
-    <div class="clinic-info">
-      <p>${clinicInfo.name}<br>
-      ${clinicInfo.address}<br>
-      Phone: ${clinicInfo.phone}<br>
-      Email: ${clinicInfo.email}
-      ${clinicInfo.website ? `<br>Website: <a href="${clinicInfo.website}" style="color: #4f46e5; text-decoration: none;">${clinicInfo.website}</a>` : ''}
-      </p>
     </div>
     
     <div class="footer">
-      <p>This is an automated message, please do not reply to this email.</p>
+      <p>This is an automated message. Please do not reply to this email.</p>
+      <p>© ${new Date().getFullYear()} ${clinicInfo.name}. All rights reserved.</p>
     </div>
   </div>
 </body>
@@ -255,35 +471,31 @@ APPOINTMENT CONFIRMATION
 
 Hello ${patient?.name || appointment.patientName},
 
-Your appointment has been successfully scheduled with ${appointment.provider} at ${clinicInfo.name}.
+Your appointment has been confirmed with the following details:
 
-APPOINTMENT DETAILS:
-Date: ${appointmentDate}
-Time: ${appointmentTime} - ${appointmentEndTime}
-Duration: ${appointment.duration} minutes
-Appointment Type: ${appointment.type}
-Provider: ${appointment.provider}
-${appointment.notes ? `Notes: ${appointment.notes}` : ''}
+DATE: ${appointmentDate}
+TIME: ${appointmentTime} (${appointment.duration} minutes)
+PROVIDER: ${providerName}${providerSpecialty ? ` (${providerSpecialty})` : ''}
+APPOINTMENT TYPE: ${appointment.type}
+${appointment.notes ? `NOTES: ${appointment.notes}` : ''}
 
-To add this appointment to your calendar, please click the "Add to Calendar" link in the HTML version of this email.
+LOCATION:
+${clinicInfo.address}
 
-${patient ? `YOUR INFORMATION:
+${patient ? `PATIENT INFORMATION:
 Name: ${patient.name}
 Phone: ${patient.phone}
 Email: ${patient.email}` : ''}
 
-CLINIC LOCATION:
-${clinicInfo.address}
+To add this appointment to your calendar, please click the "Add to Calendar" link in the HTML version of this email.
 
-If you need to reschedule or cancel your appointment, please contact us at ${clinicInfo.phone} or ${clinicInfo.email}.
-
-${clinicInfo.name}
-${clinicInfo.address}
-Phone: ${clinicInfo.phone}
-Email: ${clinicInfo.email}
+Need to reschedule? Please contact us at ${clinicInfo.phone} or ${clinicInfo.email}
 ${clinicInfo.website ? `Website: ${clinicInfo.website}` : ''}
 
-This is an automated message, please do not reply to this email.
+Appointment ID: ${appointment.id.substring(0,10)}
+
+This is an automated message. Please do not reply to this email.
+© ${new Date().getFullYear()} ${clinicInfo.name}. All rights reserved.
     `.trim();
     
     // Make direct fetch request to Gmail API with access token

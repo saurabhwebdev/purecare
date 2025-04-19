@@ -58,7 +58,8 @@ import {
   CheckCircle2,
   Loader2,
   Mail,
-  SendHorizontal
+  SendHorizontal,
+  Users
 } from 'lucide-react';
 import {
   getUserSettings,
@@ -70,7 +71,9 @@ import {
   NotificationSettings,
   AppearanceSettings,
   GoogleSettings,
-  GmailSettings
+  GmailSettings,
+  Provider,
+  ProviderSettings
 } from '@/lib/firebase/settingsService';
 import { sendTestEmail as sendGmailTestEmail } from '@/lib/google/gmailService';
 
@@ -199,6 +202,20 @@ const Settings = () => {
     { message: "Account successfully deleted", icon: CheckCircle2 }
   ];
 
+  // Inside the Settings component, add state for providers
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [defaultProvider, setDefaultProvider] = useState<string | null>(null);
+  const [showAddProviderForm, setShowAddProviderForm] = useState(false);
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
+  const [newProvider, setNewProvider] = useState<Omit<Provider, 'id'>>({
+    name: '',
+    title: 'Dr.',
+    specialty: '',
+    email: '',
+    phone: '',
+    profileImage: ''
+  });
+
   // Load user settings from Firebase
   useEffect(() => {
     const loadSettings = async () => {
@@ -276,6 +293,12 @@ const Settings = () => {
           setEmailLabels(settings.gmail.emailLabels || []);
           setGmailApiKeyConfigured(settings.gmail.apiKeyConfigured === undefined ? false : !!settings.gmail.apiKeyConfigured);
           setGmailLastSyncDate(safelyParseDate(settings.gmail.lastSyncDate));
+        }
+
+        // Load provider settings
+        if (settings.providers) {
+          setProviders(settings.providers.providers || []);
+          setDefaultProvider(settings.providers.defaultProvider);
         }
       } catch (error) {
         console.error('Error loading settings:', error);
@@ -451,43 +474,132 @@ const Settings = () => {
       return false;
     }
   };
-  
-  const handleSaveSettings = async () => {
-    if (!user) return;
-    
-    setIsSaving(true);
+
+  // Add a function to save provider settings
+  const saveProviderSettings = async () => {
+    if (!user || !user.uid) return;
     
     try {
-      // Save all settings modules
-      const results = await Promise.all([
+      const providerSettings: ProviderSettings = {
+        providers,
+        // Convert undefined to null for Firestore compatibility
+        defaultProvider: defaultProvider || null
+      };
+      
+      await updateSettingsModule(user.uid, 'providers', providerSettings);
+      
+      toast({
+        title: "Provider settings saved",
+        description: "Your provider settings have been updated successfully."
+      });
+    } catch (error) {
+      console.error("Error saving provider settings:", error);
+      toast({
+        title: "Error saving provider settings",
+        description: "There was a problem saving your provider settings.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Add a function to handle adding/editing providers
+  const handleAddOrUpdateProvider = () => {
+    if (!newProvider.name || !newProvider.specialty) {
+      toast({
+        title: "Missing required fields",
+        description: "Please enter at least the provider's name and specialty.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const updatedProviders = [...providers];
+    
+    if (editingProviderId) {
+      // Update existing provider
+      const index = updatedProviders.findIndex(p => p.id === editingProviderId);
+      if (index >= 0) {
+        updatedProviders[index] = {
+          ...newProvider,
+          id: editingProviderId
+        };
+      }
+    } else {
+      // Add new provider
+      updatedProviders.push({
+        ...newProvider,
+        id: crypto.randomUUID()
+      });
+    }
+    
+    setProviders(updatedProviders);
+    resetProviderForm();
+  };
+
+  // Function to reset the provider form
+  const resetProviderForm = () => {
+    setNewProvider({
+      name: '',
+      title: 'Dr.',
+      specialty: '',
+      email: '',
+      phone: '',
+      profileImage: ''
+    });
+    setEditingProviderId(null);
+    setShowAddProviderForm(false);
+  };
+
+  // Function to edit a provider
+  const handleEditProvider = (provider: Provider) => {
+    setEditingProviderId(provider.id);
+    setNewProvider({
+      name: provider.name,
+      title: provider.title,
+      specialty: provider.specialty,
+      email: provider.email,
+      phone: provider.phone,
+      profileImage: provider.profileImage || ''
+    });
+    setShowAddProviderForm(true);
+  };
+
+  // Function to delete a provider
+  const handleDeleteProvider = (providerId: string) => {
+    const updatedProviders = providers.filter(p => p.id !== providerId);
+    setProviders(updatedProviders);
+    
+    // If the default provider is deleted, set the default to null
+    if (defaultProvider === providerId) {
+      setDefaultProvider(null);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    try {
+      setIsSaving(true);
+      
+      await Promise.all([
         saveClinicSettings(),
         saveLocationSettings(),
         saveFinancialSettings(),
         saveNotificationSettings(),
         saveAppearanceSettings(),
         saveGoogleSettings(),
-        saveGmailSettings()
+        saveGmailSettings(),
+        saveProviderSettings()
       ]);
       
-      // Check if all saves were successful
-      if (results.every(result => result === true)) {
-        toast({
-          title: 'Settings saved',
-          description: 'Your settings have been saved successfully.',
-        });
-      } else {
-        toast({
-          title: 'Partial save',
-          description: 'Some settings may not have been saved correctly.',
-          variant: 'destructive',
-        });
-      }
-    } catch (error) {
-      console.error('Error saving settings:', error);
       toast({
-        title: 'Error saving settings',
-        description: 'There was a problem saving your settings. Please try again.',
-        variant: 'destructive',
+        title: "Settings saved",
+        description: "Your settings have been updated successfully."
+      });
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      toast({
+        title: "Error saving settings",
+        description: "There was a problem saving your settings.",
+        variant: "destructive"
       });
     } finally {
       setIsSaving(false);
@@ -658,10 +770,14 @@ const Settings = () => {
         ) : (
           <>
         <Tabs defaultValue="clinic" className="space-y-6">
-          <TabsList className="grid grid-cols-2 md:grid-cols-7 w-full h-auto">
+          <TabsList className="grid grid-cols-2 md:grid-cols-8 w-full h-auto">
             <TabsTrigger value="clinic" className="flex items-center gap-2">
               <Building2 className="h-4 w-4" />
               <span className="hidden md:inline">Clinic</span>
+            </TabsTrigger>
+            <TabsTrigger value="providers" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              <span className="hidden md:inline">Providers</span>
             </TabsTrigger>
             <TabsTrigger value="financial" className="flex items-center gap-2">
               <CreditCard className="h-4 w-4" />
@@ -1720,6 +1836,173 @@ const Settings = () => {
                 </Card>
               </TabsContent>
             </Tabs>
+          </TabsContent>
+
+          {/* Providers Tab */}
+          <TabsContent value="providers" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Healthcare Providers</CardTitle>
+                <CardDescription>
+                  Manage doctors and healthcare providers who see patients at your clinic
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {providers.length > 0 ? (
+                  <div className="space-y-4">
+                    {providers.map((provider) => (
+                      <div key={provider.id} className="border rounded-lg p-4 flex justify-between items-center">
+                        <div>
+                          <div className="font-medium">{provider.title} {provider.name}</div>
+                          <div className="text-sm text-muted-foreground">{provider.specialty}</div>
+                          {provider.email && (
+                            <div className="text-sm">{provider.email}</div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {defaultProvider === provider.id ? (
+                            <span className="text-xs bg-primary/10 text-primary py-1 px-2 rounded-full">Default</span>
+                          ) : (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => setDefaultProvider(provider.id)}
+                            >
+                              Set as Default
+                            </Button>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleEditProvider(provider)}
+                          >
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleDeleteProvider(provider.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <p>No providers added yet. Add your first provider to get started.</p>
+                  </div>
+                )}
+
+                {showAddProviderForm ? (
+                  <div className="border rounded-lg p-4 space-y-4">
+                    <h3 className="font-medium text-lg">
+                      {editingProviderId ? 'Edit Provider' : 'Add Provider'}
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="provider-title">Title</Label>
+                        <Select 
+                          value={newProvider.title} 
+                          onValueChange={(value) => setNewProvider({...newProvider, title: value})}
+                        >
+                          <SelectTrigger id="provider-title">
+                            <SelectValue placeholder="Select title" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Dr.">Dr.</SelectItem>
+                            <SelectItem value="Prof.">Prof.</SelectItem>
+                            <SelectItem value="Mr.">Mr.</SelectItem>
+                            <SelectItem value="Mrs.">Mrs.</SelectItem>
+                            <SelectItem value="Ms.">Ms.</SelectItem>
+                            <SelectItem value="none">None</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="provider-name">Name *</Label>
+                        <Input
+                          id="provider-name"
+                          value={newProvider.name}
+                          onChange={(e) => setNewProvider({...newProvider, name: e.target.value})}
+                          placeholder="Full name"
+                          required
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="provider-specialty">Specialty *</Label>
+                      <Select 
+                        value={newProvider.specialty} 
+                        onValueChange={(value) => setNewProvider({...newProvider, specialty: value})}
+                      >
+                        <SelectTrigger id="provider-specialty">
+                          <SelectValue placeholder="Select specialty" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {specialties.map((spec) => (
+                            <SelectItem key={spec} value={spec}>
+                              {spec}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="provider-email">Email</Label>
+                        <Input
+                          id="provider-email"
+                          type="email"
+                          value={newProvider.email}
+                          onChange={(e) => setNewProvider({...newProvider, email: e.target.value})}
+                          placeholder="Email address"
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="provider-phone">Phone</Label>
+                        <Input
+                          id="provider-phone"
+                          value={newProvider.phone}
+                          onChange={(e) => setNewProvider({...newProvider, phone: e.target.value})}
+                          placeholder="Phone number"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="provider-image">Profile Image URL (optional)</Label>
+                      <Input
+                        id="provider-image"
+                        value={newProvider.profileImage}
+                        onChange={(e) => setNewProvider({...newProvider, profileImage: e.target.value})}
+                        placeholder="https://example.com/image.jpg"
+                      />
+                    </div>
+                    
+                    <div className="flex justify-end gap-2 mt-4">
+                      <Button variant="outline" onClick={resetProviderForm}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleAddOrUpdateProvider}>
+                        {editingProviderId ? 'Update Provider' : 'Add Provider'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button onClick={() => setShowAddProviderForm(true)}>
+                    Add Provider
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Security Tab */}
