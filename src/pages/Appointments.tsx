@@ -57,7 +57,8 @@ import {
   Users,
   Filter,
   MoreVertical,
-  CalendarCheck
+  CalendarCheck,
+  Mail
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -81,9 +82,11 @@ import {
   addAppointment,
   updateAppointmentStatus,
   Appointment,
-  Patient
+  Patient,
+  getPatient
 } from '@/lib/firebase/patientService';
 import { syncAppointmentToGoogleCalendar } from '@/lib/google/appointmentSyncService';
+import { sendAppointmentEmail } from '@/lib/google/appointmentEmailService';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Alert,
@@ -186,8 +189,10 @@ const Appointments = () => {
   const [timeRangeFilter, setTimeRangeFilter] = useState('all');
   const [clinicSettings, setClinicSettings] = useState<any>(null);
   const [googleSettings, setGoogleSettings] = useState<any>(null);
+  const [gmailSettings, setGmailSettings] = useState<any>(null);
   const [isAddAppointmentOpen, setIsAddAppointmentOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
   
   // New appointment state
   const [newAppointment, setNewAppointment] = useState<Omit<Appointment, 'id'>>({
@@ -203,6 +208,9 @@ const Appointments = () => {
     syncedWithGoogle: false,
   });
 
+  // Add state for sending confirmation email
+  const [sendConfirmationEmail, setSendConfirmationEmail] = useState(false);
+
   // Fetch appointments, patients, and clinic settings from Firebase
   useEffect(() => {
     const loadData = async () => {
@@ -214,6 +222,9 @@ const Appointments = () => {
         const settings = await getUserSettings(user.uid);
         setClinicSettings(settings.clinic);
         setGoogleSettings(settings.google);
+        
+        // Also store Gmail settings
+        setGmailSettings(settings.gmail);
         
         // Load patients for the dropdown
         const patientData = await getPatients(user.uid);
@@ -286,74 +297,25 @@ const Appointments = () => {
 
   // Handle adding a new appointment
   const handleAddAppointment = async () => {
-    if (!user) return;
+    if (!user || !newAppointment.patientId) return;
     
     try {
       setIsLoading(true);
       
-      // Set provider name from clinic settings
-      const appointmentToAdd = {
+      // Add appointment to database
+      const appointmentId = await addAppointment(user.uid, newAppointment);
+      
+      // Get the newly created appointment with ID
+      const createdAppointment: Appointment = {
         ...newAppointment,
-        provider: clinicSettings?.clinicName || user.displayName || 'Provider',
+        id: appointmentId
       };
       
-      console.log('Creating appointment with sync flag:', appointmentToAdd.syncedWithGoogle);
+      // Refresh appointments list
+      const updatedAppointments = await getAppointments(user.uid);
+      setAppointments(updatedAppointments);
       
-      // Create appointment in Firebase
-      const appointmentId = await addAppointment(user.uid, appointmentToAdd);
-      
-      // Add appointment to local state with the returned ID
-      const newAppointmentWithId = { ...appointmentToAdd, id: appointmentId };
-      setAppointments([...appointments, newAppointmentWithId]);
-      
-      // Sync with Google Calendar if option is enabled
-      if (appointmentToAdd.syncedWithGoogle) {
-        console.log('Syncing new appointment to Google Calendar:', newAppointmentWithId);
-        setSyncingAppointmentId(appointmentId);
-        
-        // Make sure all required fields are present before syncing
-        const appointmentForSync: Appointment = {
-          ...newAppointmentWithId,
-          id: appointmentId,
-          // Ensure these fields are present and valid
-          date: newAppointmentWithId.date || format(new Date(), 'yyyy-MM-dd'),
-          time: newAppointmentWithId.time || format(new Date(), 'HH:mm'),
-          duration: newAppointmentWithId.duration || 30,
-          patientName: newAppointmentWithId.patientName || 'Patient',
-          provider: newAppointmentWithId.provider || 'Provider',
-          patientId: newAppointmentWithId.patientId || '',
-          type: newAppointmentWithId.type || 'Consultation',
-          status: newAppointmentWithId.status || 'Scheduled',
-        };
-        
-        const result = await syncAppointmentToGoogleCalendar(user.uid, appointmentForSync);
-        console.log('Google Calendar sync result:', result);
-        
-        if (result.success) {
-          toast({
-            title: "Appointment scheduled",
-            description: `Appointment for ${appointmentToAdd.patientName} has been scheduled and synced with Google Calendar.`
-          });
-        } else {
-          toast({
-            title: "Appointment scheduled",
-            description: `Appointment scheduled but Google Calendar sync failed: ${result.message}`,
-            variant: "destructive"
-          });
-        }
-        
-        // Refresh appointments to get the updated syncedWithGoogle status
-        const updatedAppointments = await getAppointments(user.uid);
-        setAppointments(updatedAppointments);
-        setSyncingAppointmentId(null);
-      } else {
-        toast({
-          title: "Appointment scheduled",
-          description: `Appointment for ${appointmentToAdd.patientName} has been scheduled.`
-        });
-      }
-      
-      setIsAddAppointmentOpen(false);
+      // Reset new appointment form
       setNewAppointment({
         patientId: '',
         patientName: '',
@@ -362,10 +324,138 @@ const Appointments = () => {
         duration: 30,
         type: 'Consultation',
         status: 'Scheduled',
+        provider: user.displayName || 'Provider',
         notes: '',
-        provider: '',
-        syncedWithGoogle: false,
+        syncedWithGoogle: false
       });
+      setSelectedDate(undefined);
+      
+      // Close the dialog
+      setIsAddAppointmentOpen(false);
+      
+      // Show success message
+      toast({
+        title: "Appointment scheduled",
+        description: `Appointment for ${newAppointment.patientName} has been scheduled.`
+      });
+      
+      // Sync with Google Calendar if enabled
+      if (newAppointment.syncedWithGoogle && googleSettings?.calendarEnabled) {
+        syncAppointmentToGoogleCalendar(user.uid, createdAppointment)
+          .then(result => {
+            if (result.success) {
+              toast({
+                title: "Google Calendar sync",
+                description: result.message
+              });
+            } else {
+              toast({
+                title: "Google Calendar sync failed",
+                description: result.message,
+                variant: "destructive"
+              });
+            }
+          });
+      }
+      
+      // Send confirmation email if enabled
+      if (sendConfirmationEmail) {
+        try {
+          // Get fresh patient data directly from the database
+          let freshPatientData = await getPatient(user.uid, createdAppointment.patientId);
+          
+          // Enhanced debugging
+          console.log('New appointment - attempting to find patient data for ID:', createdAppointment.patientId);
+          
+          // If not found in database, try to get from local state as fallback
+          if (!freshPatientData) {
+            console.log('Patient not found in database for new appointment, trying local cache...');
+            freshPatientData = patients.find(p => p.id === createdAppointment.patientId) || null;
+            
+            if (freshPatientData) {
+              console.log('Found patient in local cache for new appointment');
+            }
+          }
+          
+          // For new appointments, we should have the patient data, but just to be safe
+          if (!freshPatientData && createdAppointment.patientName) {
+            console.log('Creating synthetic patient from new appointment data');
+            // Create a minimal patient object from appointment data as fallback
+            freshPatientData = {
+              id: createdAppointment.patientId,
+              name: createdAppointment.patientName,
+              // We'll check if email is missing below
+              email: '',
+              phone: '',
+              dateOfBirth: '',
+              gender: '',
+              address: '',
+              insuranceProvider: '',
+              insuranceNumber: '',
+              status: 'Active'
+            };
+          }
+          
+          if (!freshPatientData || !freshPatientData.email) {
+            console.error('Patient email not available for new appointment:', {
+              patientId: createdAppointment.patientId,
+              patientData: freshPatientData
+            });
+            
+            // Prompt for manual email entry
+            const manualEmail = prompt("Patient email not found. Enter email address for appointment confirmation:", "");
+            
+            if (manualEmail && manualEmail.includes('@')) {
+              // Send email to manually entered address
+              const emailResult = await sendAppointmentEmail(user.uid, createdAppointment, manualEmail);
+              
+              if (emailResult.success) {
+                toast({
+                  title: "Email confirmation sent",
+                  description: `Confirmation sent to ${manualEmail}`
+                });
+              } else {
+                toast({
+                  title: "Email failed",
+                  description: emailResult.message,
+                  variant: "destructive"
+                });
+              }
+            } else {
+              toast({
+                title: "Email not sent",
+                description: "Appointment created, but email could not be sent because patient email address is not available.",
+                variant: "destructive",
+              });
+            }
+          } else {
+            console.log('Sending confirmation email to patient:', freshPatientData.email);
+            
+            // Send the email
+            const emailResult = await sendAppointmentEmail(user.uid, createdAppointment, freshPatientData.email);
+            
+            if (emailResult.success) {
+              toast({
+                title: "Email confirmation sent",
+                description: emailResult.message
+              });
+            } else {
+              toast({
+                title: "Email failed",
+                description: emailResult.message,
+                variant: "destructive"
+              });
+            }
+          }
+        } catch (emailError) {
+          console.error('Error sending confirmation email:', emailError);
+          toast({
+            title: "Email error",
+            description: "Appointment created, but there was an error sending the confirmation email.",
+            variant: "destructive"
+          });
+        }
+      }
       
     } catch (error) {
       console.error('Error adding appointment:', error);
@@ -376,6 +466,8 @@ const Appointments = () => {
       });
     } finally {
       setIsLoading(false);
+      // Reset confirmation email state
+      setSendConfirmationEmail(false);
     }
   };
 
@@ -462,6 +554,141 @@ const Appointments = () => {
     } finally {
       setIsLoading(false);
       setSyncingAppointmentId(null);
+    }
+  };
+
+  // Handle sending appointment email
+  const handleSendAppointmentEmail = async (appointment: Appointment) => {
+    if (!user || !appointment.id) return;
+    
+    try {
+      setIsLoading(true);
+      setSendingEmailId(appointment.id);
+      
+      // Validate patientId exists
+      if (!appointment.patientId) {
+        console.error('Invalid patient ID in appointment:', appointment);
+        toast({
+          title: "Invalid appointment",
+          description: "This appointment doesn't have a valid patient ID.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Enhanced debugging
+      console.log('Attempting to find patient data for ID:', appointment.patientId);
+      console.log('Appointment details:', appointment);
+      
+      // Get fresh patient data directly from the database
+      let patientData = await getPatient(user.uid, appointment.patientId);
+      
+      // If not found in database, try to get from local state as fallback
+      if (!patientData) {
+        console.log('Patient not found in database, trying local cache...');
+        patientData = patients.find(p => p.id === appointment.patientId) || null;
+        
+        if (patientData) {
+          console.log('Found patient in local cache:', patientData);
+        }
+      }
+      
+      // If we still can't find the patient, check if appointment has patient email directly
+      if (!patientData && appointment.patientName) {
+        console.log('Creating synthetic patient from appointment data');
+        // Create a minimal patient object from appointment data
+        // This is a fallback if the patient record can't be found
+        patientData = {
+          id: appointment.patientId,
+          name: appointment.patientName,
+          email: '', // We'll check if email is missing and handle it below
+          phone: '',
+          dateOfBirth: '',
+          gender: '',
+          address: '',
+          insuranceProvider: '',
+          insuranceNumber: '',
+          status: 'Active'
+        };
+      }
+      
+      if (!patientData || !patientData.email) {
+        // Prompt user to enter email manually as last resort
+        toast({
+          title: "Email not found",
+          description: "Patient email address is not available. Would you like to send the email to a different address?",
+          variant: "destructive",
+          action: (
+            <div className="flex items-center mt-2">
+              <Input 
+                id="manual-email"
+                type="email"
+                placeholder="Enter email address"
+                className="mr-2 h-8"
+                onChange={(e) => {
+                  if (e.target.value && e.target.value.includes('@')) {
+                    const manualEmail = e.target.value;
+                    // Send email to manually entered address
+                    if (confirm(`Send email to ${manualEmail}?`)) {
+                      sendAppointmentEmail(user.uid, appointment, manualEmail)
+                        .then(result => {
+                          if (result.success) {
+                            toast({
+                              title: "Email sent",
+                              description: `Confirmation sent to ${manualEmail}`,
+                            });
+                          } else {
+                            toast({
+                              title: "Email failed",
+                              description: result.message,
+                              variant: "destructive",
+                            });
+                          }
+                        });
+                    }
+                  }
+                }}
+              />
+            </div>
+          )
+        });
+        
+        // Log debugging information
+        console.error('Patient email not available:', {
+          patientId: appointment.patientId,
+          patientData
+        });
+        return;
+      }
+      
+      console.log('Sending email to patient:', patientData.email);
+      
+      // Send appointment confirmation email
+      const result = await sendAppointmentEmail(user.uid, appointment, patientData.email);
+      
+      // Show result toast
+      if (result.success) {
+        toast({
+          title: "Email sent",
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: "Email failed",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error sending appointment email:', error);
+      toast({
+        title: 'Error',
+        description: 'There was a problem sending the appointment email.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+      setSendingEmailId(null);
     }
   };
 
@@ -629,6 +856,25 @@ const Appointments = () => {
                         </div>
                       </div>
                     )}
+                    
+                    {/* Gmail integration toggle - add this after the Google Calendar toggle */}
+                    {gmailSettings?.enabled && (
+                      <div className="space-y-2 pt-2 border-t border-border">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="send-email-confirmation">Send Email Confirmation</Label>
+                            <p className="text-xs text-muted-foreground">
+                              Send an appointment confirmation email to the patient
+                            </p>
+                          </div>
+                          <Switch
+                            id="send-email-confirmation"
+                            checked={sendConfirmationEmail}
+                            onCheckedChange={setSendConfirmationEmail}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <DialogFooter>
                     <DialogClose asChild>
@@ -737,8 +983,22 @@ const Appointments = () => {
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
+                                  onClick={() => handleSendAppointmentEmail(appointment)}
+                                  disabled={sendingEmailId === appointment.id || appointment.status === 'Cancelled'}
+                                >
+                                  {sendingEmailId === appointment.id ? (
+                                    <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
+                                  ) : (
+                                    <Mail className="h-4 w-4 mr-2 text-purple-600" />
+                                  )}
+                                  {sendingEmailId === appointment.id 
+                                    ? 'Sending...' 
+                                    : 'Send Email Confirmation'
+                                  }
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
                                   onClick={() => handleSyncToGoogleCalendar(appointment)}
-                                  disabled={appointment.syncedWithGoogle || syncingAppointmentId === appointment.id}
+                                  disabled={appointment.syncedWithGoogle || syncingAppointmentId === appointment.id || appointment.status === 'Cancelled'}
                                 >
                                   {syncingAppointmentId === appointment.id ? (
                                     <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
