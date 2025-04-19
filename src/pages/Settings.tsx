@@ -57,7 +57,8 @@ import {
   CircleX,
   CheckCircle2,
   Loader2,
-  Mail
+  Mail,
+  SendHorizontal
 } from 'lucide-react';
 import {
   getUserSettings,
@@ -71,6 +72,7 @@ import {
   GoogleSettings,
   GmailSettings
 } from '@/lib/firebase/settingsService';
+import { sendTestEmail as sendGmailTestEmail } from '@/lib/google/gmailService';
 
 // Country data with currency information
 const countries = [
@@ -180,6 +182,10 @@ const Settings = () => {
   const [emailLabels, setEmailLabels] = useState<string[]>([]);
   const [gmailApiKeyConfigured, setGmailApiKeyConfigured] = useState(false);
   const [gmailLastSyncDate, setGmailLastSyncDate] = useState<Date | null>(null);
+  
+  // Test email state
+  const [testEmailAddress, setTestEmailAddress] = useState('');
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
 
   // Deletion steps with messages and icons
   const deletionSteps = [
@@ -525,6 +531,61 @@ const Settings = () => {
     };
     
     animateDeletion();
+  };
+
+  const sendTestEmail = async () => {
+    if (!testEmailAddress || !gmailEnabled || !gmailClientId) {
+      toast({
+        title: "Cannot send test email",
+        description: "Please ensure Gmail is enabled, credentials are configured, and you've entered a test email address.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsSendingTestEmail(true);
+    
+    try {
+      // Use the actual Gmail service to send a test email
+      const success = await sendGmailTestEmail(testEmailAddress);
+      
+      if (success) {
+        toast({
+          title: "Test email sent!",
+          description: `A test email was successfully sent to ${testEmailAddress}. Please check your inbox.`,
+        });
+      } else {
+        toast({
+          title: "Failed to send test email",
+          description: "There was an error sending the test email. Please check your Gmail configuration and ensure you've granted the necessary permissions.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Error sending test email:", error);
+      
+      // Provide more helpful error messages for specific error types
+      let errorDescription = "There was an error sending the test email.";
+      if (error instanceof Error) {
+        if (error.message.includes("Gmail API is not ready")) {
+          errorDescription = "Failed to initialize Gmail API. Please ensure you've configured the correct Client ID and granted the necessary permissions.";
+        } else if (error.message.includes("authentication")) {
+          errorDescription = "Authentication failed. Please check your Google Cloud configuration and ensure Gmail API is enabled.";
+        } else if (error.message.includes("consent")) {
+          errorDescription = "You need to grant permission to send emails. Please try again and accept the permission request.";
+        } else {
+          errorDescription = error.message;
+        }
+      }
+      
+      toast({
+        title: "Failed to send test email",
+        description: errorDescription,
+        variant: "destructive"
+      });
+    } finally {
+      setIsSendingTestEmail(false);
+    }
   };
 
   return (
@@ -1499,6 +1560,51 @@ const Settings = () => {
                       />
                       <p className="text-sm text-muted-foreground">
                         The API Key from your Google Cloud Console
+                      </p>
+                    </div>
+                    
+                    <Separator />
+                    
+                    {/* Test Email Functionality */}
+                    <div className="space-y-2 p-4 bg-muted/50 rounded-lg border">
+                      <div className="flex items-center">
+                        <SendHorizontal className="h-5 w-5 mr-2 text-primary" />
+                        <Label htmlFor="test-email" className="text-base font-medium">Send Test Email</Label>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Send a test email to verify your Gmail integration is working correctly
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <Input
+                          id="test-email"
+                          type="email"
+                          value={testEmailAddress}
+                          onChange={(e) => setTestEmailAddress(e.target.value)}
+                          placeholder="Enter recipient email address"
+                          className="flex-1"
+                        />
+                        <Button 
+                          onClick={sendTestEmail}
+                          disabled={isSendingTestEmail || !testEmailAddress || !gmailEnabled}
+                          className="min-w-[120px]"
+                        >
+                          {isSendingTestEmail ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              Sending...
+                            </>
+                          ) : (
+                            <>
+                              <SendHorizontal className="h-4 w-4 mr-2" />
+                              Send Test
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {!gmailEnabled ? "Enable Gmail Integration to send test emails" : 
+                         !gmailClientId ? "Configure your Gmail OAuth Client ID first" : 
+                         "A test email will be sent to verify your Gmail configuration"}
                       </p>
                     </div>
                     
