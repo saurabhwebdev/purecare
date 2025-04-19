@@ -7,9 +7,12 @@ import {
   Prescription, 
   getPrescriptionWithSettings 
 } from '@/lib/firebase/prescriptionService';
+import { getPatient } from '@/lib/firebase/patientService';
+import { sendPrescriptionEmail } from '@/lib/google/prescriptionEmailService';
 import { UserSettings } from '@/lib/firebase/settingsService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { 
   AlertTriangle, 
   ArrowLeft, 
@@ -19,7 +22,8 @@ import {
   Calendar,
   User,
   FileCheck,
-  Pill
+  Pill,
+  Mail
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { 
@@ -55,6 +59,7 @@ const PrescriptionView = () => {
   const [error, setError] = useState<string | null>(null);
   const [showPDFPreview, setShowPDFPreview] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const pdfRef = useRef<HTMLDivElement>(null);
 
@@ -141,6 +146,100 @@ const PrescriptionView = () => {
     }
   };
 
+  // Handle sending the prescription email
+  const handleSendEmail = async () => {
+    if (!user || !prescription) return;
+    
+    try {
+      setSendingEmail(true);
+      
+      // Validate patientId exists
+      if (!prescription.patientId) {
+        toast({
+          title: "Invalid prescription",
+          description: "This prescription doesn't have a valid patient ID.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Get patient data from the database
+      let patientData = await getPatient(user.uid, prescription.patientId);
+      
+      // If we can't find the patient or there's no email, prompt for manual entry
+      if (!patientData || !patientData.email) {
+        toast({
+          title: "Email not found",
+          description: "Patient email address is not available. Would you like to send the email to a different address?",
+          variant: "destructive",
+          action: (
+            <div className="flex items-center mt-2">
+              <Input 
+                id="manual-email"
+                type="email"
+                placeholder="Enter email address"
+                className="mr-2 h-8"
+                onChange={(e) => {
+                  if (e.target.value && e.target.value.includes('@')) {
+                    const manualEmail = e.target.value;
+                    // Send email to manually entered address
+                    if (confirm(`Send email to ${manualEmail}?`)) {
+                      sendPrescriptionEmail(user.uid, prescription, manualEmail)
+                        .then(result => {
+                          if (result.success) {
+                            toast({
+                              title: "Email sent",
+                              description: `Prescription sent to ${manualEmail}`,
+                            });
+                          } else {
+                            toast({
+                              title: "Email failed",
+                              description: result.message,
+                              variant: "destructive",
+                            });
+                          }
+                        })
+                        .finally(() => setSendingEmail(false));
+                    } else {
+                      setSendingEmail(false);
+                    }
+                  }
+                }}
+              />
+            </div>
+          )
+        });
+        return;
+      }
+      
+      // Send prescription confirmation email
+      const result = await sendPrescriptionEmail(user.uid, prescription, patientData.email);
+      
+      // Show result toast
+      if (result.success) {
+        toast({
+          title: "Email sent",
+          description: `Prescription sent to ${patientData.email}`,
+        });
+      } else {
+        toast({
+          title: "Email failed",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error sending prescription email:', error);
+      toast({
+        title: 'Error',
+        description: 'There was a problem sending the prescription email.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   // Get badge variant based on status
   const getBadgeVariant = (status: string) => {
     switch (status) {
@@ -189,6 +288,15 @@ const PrescriptionView = () => {
                 >
                   <Pencil className="h-4 w-4" />
                   <span>Edit</span>
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="flex items-center gap-1"
+                  onClick={handleSendEmail}
+                  disabled={sendingEmail}
+                >
+                  <Mail className="h-4 w-4" />
+                  <span>{sendingEmail ? 'Sending...' : 'Send Email'}</span>
                 </Button>
                 <Button 
                   className="flex items-center gap-1"

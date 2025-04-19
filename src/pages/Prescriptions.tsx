@@ -19,6 +19,7 @@ import {
   createPrescription,
   Medicine
 } from '@/lib/firebase/prescriptionService';
+import { getPatient, getPatients } from '@/lib/firebase/patientService';
 import {
   Dialog,
   DialogContent,
@@ -62,7 +63,8 @@ import {
   PlusCircle,
   User,
   Calendar,
-  X
+  X,
+  Mail
 } from 'lucide-react';
 
 import PrescriptionPDF from '@/components/prescription/PrescriptionPDF';
@@ -70,7 +72,6 @@ import { generatePrescriptionPDF, downloadBlob } from '@/lib/pdf/pdfGenerator';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { getPatients } from '@/lib/firebase/patientService';
 import {
   Select,
   SelectContent,
@@ -79,6 +80,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import AISymptomsSuggestion from '@/components/prescription/AISymptomsSuggestion';
+import { sendPrescriptionEmail } from '@/lib/google/prescriptionEmailService';
 
 const Prescriptions = () => {
   const navigate = useNavigate();
@@ -94,6 +96,7 @@ const Prescriptions = () => {
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
   const [settings, setSettings] = useState<any>(null);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
   
   // New state for prescription creation
   const [isAddPrescriptionOpen, setIsAddPrescriptionOpen] = useState(false);
@@ -399,6 +402,141 @@ const Prescriptions = () => {
     });
   };
 
+  // Handle sending prescription email
+  const handleSendPrescriptionEmail = async (prescription: Prescription) => {
+    if (!user || !prescription.id) return;
+    
+    try {
+      setLoading(true);
+      setSendingEmailId(prescription.id);
+      
+      // Validate patientId exists
+      if (!prescription.patientId) {
+        console.error('Invalid patient ID in prescription:', prescription);
+        toast({
+          title: "Invalid prescription",
+          description: "This prescription doesn't have a valid patient ID.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Enhanced debugging
+      console.log('Attempting to find patient data for ID:', prescription.patientId);
+      console.log('Prescription details:', prescription);
+      
+      // Get fresh patient data directly from the database
+      let patientData = await getPatient(user.uid, prescription.patientId);
+      
+      // If not found in database, try to get from local state as fallback
+      if (!patientData) {
+        console.log('Patient not found in database, trying local cache...');
+        patientData = patients.find(p => p.id === prescription.patientId) || null;
+        
+        if (patientData) {
+          console.log('Found patient in local cache:', patientData);
+        }
+      }
+      
+      // If we still can't find the patient, check if prescription has patient email directly
+      if (!patientData && prescription.patientName) {
+        console.log('Creating synthetic patient from prescription data');
+        // Create a minimal patient object from prescription data
+        // This is a fallback if the patient record can't be found
+        patientData = {
+          id: prescription.patientId,
+          name: prescription.patientName,
+          email: '', // We'll check if email is missing and handle it below
+          phone: '',
+          dateOfBirth: '',
+          gender: '',
+          address: '',
+          insuranceProvider: '',
+          insuranceNumber: '',
+          status: 'Active'
+        };
+      }
+      
+      if (!patientData || !patientData.email) {
+        // Prompt user to enter email manually as last resort
+        toast({
+          title: "Email not found",
+          description: "Patient email address is not available. Would you like to send the email to a different address?",
+          variant: "destructive",
+          action: (
+            <div className="flex items-center mt-2">
+              <Input 
+                id="manual-email"
+                type="email"
+                placeholder="Enter email address"
+                className="mr-2 h-8"
+                onChange={(e) => {
+                  if (e.target.value && e.target.value.includes('@')) {
+                    const manualEmail = e.target.value;
+                    // Send email to manually entered address
+                    if (confirm(`Send email to ${manualEmail}?`)) {
+                      sendPrescriptionEmail(user.uid, prescription, manualEmail)
+                        .then(result => {
+                          if (result.success) {
+                            toast({
+                              title: "Email sent",
+                              description: `Prescription sent to ${manualEmail}`,
+                            });
+                          } else {
+                            toast({
+                              title: "Email failed",
+                              description: result.message,
+                              variant: "destructive",
+                            });
+                          }
+                        });
+                    }
+                  }
+                }}
+              />
+            </div>
+          )
+        });
+        
+        // Log debugging information
+        console.error('Patient email not available:', {
+          patientId: prescription.patientId,
+          patientData
+        });
+        return;
+      }
+      
+      console.log('Sending email to patient:', patientData.email);
+      
+      // Send prescription confirmation email
+      const result = await sendPrescriptionEmail(user.uid, prescription, patientData.email);
+      
+      // Show result toast
+      if (result.success) {
+        toast({
+          title: "Email sent",
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: "Email failed",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error sending prescription email:', error);
+      toast({
+        title: 'Error',
+        description: 'There was a problem sending the prescription email.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+      setSendingEmailId(null);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="w-full backdrop-blur-md bg-background/80 py-4 border-b border-border sticky top-0 z-10">
@@ -627,7 +765,7 @@ const Prescriptions = () => {
                   </TableRow>
                 ) : (
                   filteredPrescriptions.map((prescription) => (
-                    <TableRow key={prescription.id}>
+                    <TableRow key={prescription.id} className="hover:bg-muted/50">
                       <TableCell>{formatDate(prescription.createdAt)}</TableCell>
                       <TableCell className="font-medium">{prescription.patientName}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{prescription.diagnosis || 'Not specified'}</TableCell>
@@ -654,7 +792,6 @@ const Prescriptions = () => {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleViewPrescription(prescription.id!)}>
                               <Eye className="h-4 w-4 mr-2" />
                               View
@@ -667,10 +804,14 @@ const Prescriptions = () => {
                               <FileText className="h-4 w-4 mr-2" />
                               Generate PDF
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleSendPrescriptionEmail(prescription)}>
+                              <Mail className="h-4 w-4 mr-2" />
+                              {sendingEmailId === prescription.id ? 'Sending...' : 'Send Email'}
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
                               onClick={() => handleDeleteClick(prescription.id!)}
-                              className="text-destructive focus:text-destructive"
+                              className="text-destructive"
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
                               Delete
