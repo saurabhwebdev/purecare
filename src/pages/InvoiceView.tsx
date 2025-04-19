@@ -8,6 +8,8 @@ import {
   getInvoiceWithSettings,
   updateInvoiceStatus
 } from '@/lib/firebase/invoiceService';
+import { getPatient } from '@/lib/firebase/patientService';
+import { sendInvoiceEmail } from '@/lib/google/invoiceEmailService';
 import { UserSettings } from '@/lib/firebase/settingsService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -23,7 +25,8 @@ import {
   DollarSign,
   CheckCircle,
   AlertCircle,
-  Clock2
+  Clock2,
+  Mail
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { 
@@ -67,9 +70,12 @@ const InvoiceView = () => {
   const [error, setError] = useState<string | null>(null);
   const [showPDFPreview, setShowPDFPreview] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
-  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showStatusDialog, setShowStatusDialog] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [newStatus, setNewStatus] = useState<Invoice['status']>('draft');
   const [paymentMethod, setPaymentMethod] = useState('');
-  const [paymentDate, setPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [paymentDate, setPaymentDate] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const pdfRef = useRef<HTMLDivElement>(null);
 
@@ -190,105 +196,146 @@ const InvoiceView = () => {
     }
   };
 
-  // Handle marking invoice as paid
-  const handleMarkAsPaid = () => {
-    setShowPaymentDialog(true);
-  };
-
-  // Confirm payment
-  const confirmPayment = async () => {
-    if (!invoice?.id || !user) return;
-
+  // Handle sending the invoice email
+  const handleSendEmail = async () => {
+    if (!user || !invoice) return;
+    
     try {
-      setLoading(true);
+      setSendingEmail(true);
       
-      await updateInvoiceStatus(invoice.id, 'paid', paymentMethod, paymentDate);
+      // Validate patientId exists
+      if (!invoice.patientId) {
+        toast({
+          title: "Invalid invoice",
+          description: "This invoice doesn't have a valid patient ID.",
+          variant: "destructive",
+        });
+        return;
+      }
       
-      // Update local state
-      setInvoice({
-        ...invoice,
-        status: 'paid',
-        paymentMethod,
-        paymentDate
-      });
+      // Get patient data from the database
+      let patientData = await getPatient(user.uid, invoice.patientId);
       
-      toast({
-        title: 'Success',
-        description: 'Invoice marked as paid successfully.',
-      });
+      // If we can't find the patient or there's no email, prompt for manual entry
+      if (!patientData || !patientData.email) {
+        toast({
+          title: "Email not found",
+          description: "Patient email address is not available. Please enter an email address below and click Send.",
+          variant: "destructive",
+          action: (
+            <div className="flex items-center mt-2">
+              <form 
+                className="flex w-full gap-2" 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const input = e.currentTarget.querySelector('#manual-email') as HTMLInputElement;
+                  if (input && input.value && input.value.includes('@')) {
+                    const manualEmail = input.value;
+                    sendInvoiceEmail(user.uid, invoice, manualEmail)
+                      .then(result => {
+                        if (result.success) {
+                          toast({
+                            title: "Email sent",
+                            description: `Invoice sent to ${manualEmail}`,
+                          });
+                        } else {
+                          toast({
+                            title: "Email failed",
+                            description: result.message,
+                            variant: "destructive",
+                          });
+                        }
+                      })
+                      .finally(() => setSendingEmail(false));
+                  }
+                }}
+              >
+                <Input 
+                  id="manual-email"
+                  type="email"
+                  placeholder="Enter email address"
+                  className="h-8"
+                  required
+                />
+                <Button type="submit" variant="outline" className="h-8 px-2">
+                  Send
+                </Button>
+              </form>
+            </div>
+          )
+        });
+        return;
+      }
       
-      setShowPaymentDialog(false);
+      // Send invoice confirmation email
+      const result = await sendInvoiceEmail(user.uid, invoice, patientData.email);
+      
+      // Show result toast
+      if (result.success) {
+        toast({
+          title: "Email sent",
+          description: `Invoice sent to ${patientData.email}`,
+        });
+      } else {
+        toast({
+          title: "Email failed",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
     } catch (error) {
-      console.error('Error marking invoice as paid:', error);
+      console.error('Error sending invoice email:', error);
       toast({
         title: 'Error',
-        description: 'Failed to mark invoice as paid.',
+        description: 'There was a problem sending the invoice email.',
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      setSendingEmail(false);
     }
   };
 
-  // Handle marking invoice as sent
-  const handleMarkAsSent = async () => {
+  const handleUpdateStatus = async () => {
     if (!invoice?.id || !user) return;
-
+    
     try {
-      setLoading(true);
+      setUpdatingStatus(true);
       
-      await updateInvoiceStatus(invoice.id, 'sent');
-      
-      // Update local state
-      setInvoice({
-        ...invoice,
-        status: 'sent'
-      });
+      if (newStatus === 'paid') {
+        await updateInvoiceStatus(invoice.id, newStatus, paymentMethod, paymentDate);
+        
+        // Update local state
+        setInvoice({
+          ...invoice,
+          status: newStatus,
+          paymentMethod,
+          paymentDate
+        });
+      } else {
+        await updateInvoiceStatus(invoice.id, newStatus);
+        
+        // Update local state
+        setInvoice({
+          ...invoice,
+          status: newStatus
+        });
+      }
       
       toast({
         title: 'Success',
-        description: 'Invoice marked as sent successfully.',
+        description: `Invoice marked as ${newStatus} successfully.`,
       });
+      
+      setShowStatusDialog(false);
     } catch (error) {
-      console.error('Error marking invoice as sent:', error);
+      console.error('Error updating invoice status:', error);
       toast({
         title: 'Error',
-        description: 'Failed to mark invoice as sent.',
+        description: 'Failed to update invoice status.',
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle marking invoice as overdue
-  const handleMarkAsOverdue = async () => {
-    if (!invoice?.id || !user) return;
-
-    try {
-      setLoading(true);
-      
-      await updateInvoiceStatus(invoice.id, 'overdue');
-      
-      // Update local state
-      setInvoice({
-        ...invoice,
-        status: 'overdue'
-      });
-      
-      toast({
-        title: 'Success',
-        description: 'Invoice marked as overdue successfully.',
-      });
-    } catch (error) {
-      console.error('Error marking invoice as overdue:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to mark invoice as overdue.',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
+      setUpdatingStatus(false);
     }
   };
 
@@ -314,57 +361,44 @@ const InvoiceView = () => {
                 <p className="text-muted-foreground">
                   {loading ? 'Loading details...' : 
                     error ? 'Error loading invoice' : 
-                    invoice ? `${invoice.patientName} - ${formatDate(invoice.createdAt)}` : 
+                    invoice ? `${formatDate(invoice.createdAt)} · ${invoice.patientName}` : 
                     'Invoice not found'}
                 </p>
               </div>
             </div>
             {invoice && !error && !loading && (
-              <div className="flex items-center gap-2 flex-wrap">
-                {invoice.status === 'draft' && (
-                  <Button 
-                    variant="outline" 
-                    className="flex items-center gap-1"
-                    onClick={handleMarkAsSent}
-                  >
-                    <Clock className="h-4 w-4" />
-                    <span>Mark as Sent</span>
-                  </Button>
-                )}
-                
-                {(invoice.status === 'draft' || invoice.status === 'sent') && (
-                  <Button 
-                    variant="outline" 
-                    className="flex items-center gap-1"
-                    onClick={handleMarkAsPaid}
-                  >
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  className="flex items-center gap-1"
+                  onClick={handleEdit}
+                >
+                  <Edit className="h-4 w-4" />
+                  <span>Edit</span>
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="flex items-center gap-1"
+                  onClick={() => setShowStatusDialog(true)}
+                >
+                  {invoice.status === 'paid' ? (
                     <CheckCircle className="h-4 w-4" />
-                    <span>Mark as Paid</span>
-                  </Button>
-                )}
-                
-                {invoice.status === 'sent' && (
-                  <Button 
-                    variant="outline" 
-                    className="flex items-center gap-1"
-                    onClick={handleMarkAsOverdue}
-                  >
+                  ) : invoice.status === 'overdue' ? (
                     <AlertCircle className="h-4 w-4" />
-                    <span>Mark as Overdue</span>
-                  </Button>
-                )}
-                
-                {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
-                  <Button 
-                    variant="outline" 
-                    className="flex items-center gap-1"
-                    onClick={handleEdit}
-                  >
-                    <Edit className="h-4 w-4" />
-                    <span>Edit</span>
-                  </Button>
-                )}
-                
+                  ) : (
+                    <Clock className="h-4 w-4" />
+                  )}
+                  <span>Update Status</span>
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="flex items-center gap-1"
+                  onClick={handleSendEmail}
+                  disabled={sendingEmail}
+                >
+                  <Mail className="h-4 w-4" />
+                  <span>{sendingEmail ? 'Sending...' : 'Send Email'}</span>
+                </Button>
                 <Button 
                   className="flex items-center gap-1"
                   onClick={() => setShowPDFPreview(true)}
@@ -585,86 +619,6 @@ const InvoiceView = () => {
         )}
       </div>
 
-      {/* Payment Dialog */}
-      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
-            <DialogDescription>
-              Record payment details for invoice {invoice?.invoiceNumber}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <div className="flex justify-between mb-2">
-                <span>Total Amount:</span>
-                <span className="font-semibold">
-                  {invoice ? formatCurrency(invoice.total) : '$0.00'}
-                </span>
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="payment-method" className="text-sm font-medium">
-                  Payment Method
-                </label>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select payment method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {settings?.financial.paymentMethods.creditCard && (
-                      <SelectItem value="Credit Card">Credit Card</SelectItem>
-                    )}
-                    {settings?.financial.paymentMethods.cash && (
-                      <SelectItem value="Cash">Cash</SelectItem>
-                    )}
-                    {settings?.financial.paymentMethods.bankTransfer && (
-                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                    )}
-                    {settings?.financial.paymentMethods.insurance && (
-                      <SelectItem value="Insurance">Insurance</SelectItem>
-                    )}
-                    <SelectItem value="Check">Check</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="payment-date" className="text-sm font-medium">
-                  Payment Date
-                </label>
-                <Input
-                  id="payment-date"
-                  type="date"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowPaymentDialog(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="button" 
-              onClick={confirmPayment}
-              disabled={!paymentMethod}
-            >
-              <DollarSign className="h-4 w-4 mr-2" />
-              Record Payment
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* PDF Preview Dialog */}
       <Dialog open={showPDFPreview} onOpenChange={setShowPDFPreview}>
         <DialogContent className="max-w-5xl">
@@ -703,6 +657,107 @@ const InvoiceView = () => {
               disabled={generatingPDF}
             >
               {generatingPDF ? 'Generating PDF...' : 'Download PDF'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Status Update Dialog */}
+      <Dialog open={showStatusDialog} onOpenChange={setShowStatusDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Invoice Status</DialogTitle>
+            <DialogDescription>
+              Update the status for invoice {invoice?.invoiceNumber}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <div className="flex justify-between mb-2">
+                <span>Current Status:</span>
+                <span className="font-semibold">
+                  {invoice?.status.toUpperCase()}
+                </span>
+              </div>
+              
+              <div className="space-y-2">
+                <label htmlFor="new-status" className="text-sm font-medium">
+                  New Status
+                </label>
+                <Select value={newStatus} onValueChange={(value: Invoice['status']) => setNewStatus(value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select new status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="sent">Sent</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="overdue">Overdue</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {newStatus === 'paid' && (
+                <>
+                  <div className="space-y-2">
+                    <label htmlFor="payment-method" className="text-sm font-medium">
+                      Payment Method
+                    </label>
+                    <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select payment method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {settings?.financial.paymentMethods.creditCard && (
+                          <SelectItem value="Credit Card">Credit Card</SelectItem>
+                        )}
+                        {settings?.financial.paymentMethods.cash && (
+                          <SelectItem value="Cash">Cash</SelectItem>
+                        )}
+                        {settings?.financial.paymentMethods.bankTransfer && (
+                          <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                        )}
+                        {settings?.financial.paymentMethods.insurance && (
+                          <SelectItem value="Insurance">Insurance</SelectItem>
+                        )}
+                        <SelectItem value="Check">Check</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="payment-date" className="text-sm font-medium">
+                      Payment Date
+                    </label>
+                    <Input
+                      id="payment-date"
+                      type="date"
+                      value={paymentDate}
+                      onChange={(e) => setPaymentDate(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowStatusDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="button" 
+              onClick={handleUpdateStatus}
+              disabled={(newStatus === 'paid' && !paymentMethod) || updatingStatus}
+            >
+              {updatingStatus ? 'Updating...' : 'Update Status'}
             </Button>
           </DialogFooter>
         </DialogContent>

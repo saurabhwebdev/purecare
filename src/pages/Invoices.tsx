@@ -17,7 +17,8 @@ import {
   deleteInvoice, 
   getInvoiceWithSettings,
   updateInvoiceStatus,
-  createInvoice
+  createInvoice,
+  generateInvoiceNumber
 } from '@/lib/firebase/invoiceService';
 import { getUserSettings, UserSettings } from '@/lib/firebase/settingsService';
 import {
@@ -75,7 +76,8 @@ import {
   CreditCard,
   Calendar,
   PlusCircle,
-  User
+  User,
+  Mail
 } from 'lucide-react';
 
 import InvoicePDF from '@/components/invoice/InvoicePDF';
@@ -84,7 +86,8 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { getPatients } from '@/lib/firebase/patientService';
+import { getPatients, getPatient } from '@/lib/firebase/patientService';
+import { sendInvoiceEmail } from '@/lib/google/invoiceEmailService';
 
 const Invoices = () => {
   const navigate = useNavigate();
@@ -112,7 +115,7 @@ const Invoices = () => {
     patientId: '',
     patientName: '',
     doctorId: '',
-    invoiceNumber: 'INV-',  // Will be updated by generateInvoiceNumber
+    invoiceNumber: '',  // Will be generated when settings are loaded
     dueDate: format(new Date(new Date().setDate(new Date().getDate() + 30)), 'yyyy-MM-dd'),
     items: [{ description: '', quantity: 1, rate: 0, amount: 0 }],
     subtotal: 0,
@@ -123,7 +126,11 @@ const Invoices = () => {
     status: 'draft'
   });
   
+  // State to hold the selected patient's email separately
+  const [selectedPatientEmail, setSelectedPatientEmail] = useState<string>('');
+
   const pdfRef = useRef<HTMLDivElement>(null);
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
 
   // Fetch invoices and patients from Firestore
   useEffect(() => {
@@ -220,15 +227,6 @@ const Invoices = () => {
     }
   };
 
-  // Generate a standard invoice number format
-  const generateInvoiceNumber = () => {
-    const year = new Date().getFullYear().toString().substring(2, 4);
-    const month = (new Date().getMonth() + 1).toString().padStart(2, '0');
-    const randomNum = Math.floor(10000 + Math.random() * 90000);
-    const prefix = settings?.financial.invoicePrefix || 'INV-';
-    return `${prefix}${year}${month}-${randomNum}`;
-  };
-
   // Update new invoice field
   const updateInvoiceField = (field: string, value: any) => {
     setNewInvoice(prev => ({
@@ -243,6 +241,7 @@ const Invoices = () => {
     if (selectedPatient) {
       updateInvoiceField('patientId', patientId);
       updateInvoiceField('patientName', selectedPatient.name);
+      setSelectedPatientEmail(selectedPatient.email || '');
     }
   };
 
@@ -323,7 +322,7 @@ const Invoices = () => {
       };
       
       // Create invoice
-      await createInvoice(user.uid, invoiceWithUserId as Omit<Invoice, 'id' | 'createdAt' | 'updatedAt' | 'clinicInfo' | 'invoiceNumber'>);
+      const createdInvoiceObj = await createInvoice(user.uid, invoiceWithUserId as Omit<Invoice, 'id' | 'createdAt' | 'updatedAt' | 'clinicInfo' | 'invoiceNumber'>);
       
       // Refresh invoices
       const updatedInvoices = await getAllInvoices(user.uid);
@@ -350,12 +349,106 @@ const Invoices = () => {
         notes: '',
         status: 'draft'
       });
+      setSelectedPatientEmail(''); // Reset the selected patient email
       setIsAddInvoiceOpen(false);
     } catch (error) {
       console.error('Error creating invoice:', error);
       toast({
         title: 'Error',
         description: 'Failed to create invoice',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle creating an invoice and sending email
+  const handleCreateAndSendInvoice = async () => {
+    if (!user || !newInvoice.patientId || !newInvoice.patientName) {
+      toast({
+        title: 'Error',
+        description: 'Please select a patient.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check if patient email is available
+    if (!selectedPatientEmail) {
+      toast({
+        title: 'Warning',
+        description: 'Patient has no email address. Please create invoice first, then add email manually.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Add user ID
+      const invoiceWithUserId = {
+        ...newInvoice,
+        doctorId: user.uid
+      };
+      
+      // Create invoice
+      const createdInvoiceObj = await createInvoice(user.uid, invoiceWithUserId as Omit<Invoice, 'id' | 'createdAt' | 'updatedAt' | 'clinicInfo' | 'invoiceNumber'>);
+      
+      // Refresh invoices
+      const updatedInvoices = await getAllInvoices(user.uid);
+      setInvoices(updatedInvoices);
+      setFilteredInvoices(updatedInvoices);
+      
+      toast({
+        title: 'Success',
+        description: 'Invoice created successfully. Sending email...',
+      });
+      
+      // Find the newly created invoice
+      const createdInvoice = updatedInvoices.find(invoice => invoice.id === createdInvoiceObj.id);
+      
+      if (createdInvoice) {
+        // Send email
+        const result = await sendInvoiceEmail(user.uid, createdInvoice, selectedPatientEmail);
+        
+        if (result.success) {
+          toast({
+            title: 'Email sent',
+            description: `Invoice sent to ${selectedPatientEmail}`,
+          });
+        } else {
+          toast({
+            title: 'Email failed',
+            description: result.message,
+            variant: 'destructive',
+          });
+        }
+      }
+      
+      // Reset form and close dialog
+      setNewInvoice({
+        patientId: '',
+        patientName: '',
+        doctorId: '',
+        invoiceNumber: generateInvoiceNumber(),
+        dueDate: format(new Date(new Date().setDate(new Date().getDate() + 30)), 'yyyy-MM-dd'),
+        items: [{ description: '', quantity: 1, rate: 0, amount: 0 }],
+        subtotal: 0,
+        tax: 0,
+        discount: 0,
+        total: 0,
+        notes: '',
+        status: 'draft'
+      });
+      setSelectedPatientEmail(''); // Reset the selected patient email
+      setIsAddInvoiceOpen(false);
+    } catch (error) {
+      console.error('Error creating invoice and sending email:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to create invoice or send email',
         variant: 'destructive',
       });
     } finally {
@@ -377,33 +470,6 @@ const Invoices = () => {
   const handleDeleteClick = (id: string) => {
     setInvoiceToDelete(id);
     setShowDeleteDialog(true);
-  };
-
-  // Confirm deletion
-  const confirmDelete = async () => {
-    if (!invoiceToDelete) return;
-
-    try {
-      await deleteInvoice(invoiceToDelete);
-      
-      // Update local state
-      setInvoices(prev => prev.filter(p => p.id !== invoiceToDelete));
-      
-      toast({
-        title: 'Success',
-        description: 'Invoice deleted successfully.',
-      });
-    } catch (error) {
-      console.error('Error deleting invoice:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete invoice.',
-        variant: 'destructive',
-      });
-    } finally {
-      setShowDeleteDialog(false);
-      setInvoiceToDelete(null);
-    }
   };
 
   // Handle showing PDF preview
@@ -571,6 +637,145 @@ const Invoices = () => {
     }
   };
 
+  // Handle sending invoice email
+  const handleSendInvoiceEmail = async (invoice: Invoice) => {
+    if (!user || !invoice.id) return;
+    
+    try {
+      setLoading(true);
+      setSendingEmailId(invoice.id);
+      
+      // Validate patientId exists
+      if (!invoice.patientId) {
+        console.error('Invalid patient ID in invoice:', invoice);
+        toast({
+          title: "Invalid invoice",
+          description: "This invoice doesn't have a valid patient ID.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      console.log('Attempting to find patient data for ID:', invoice.patientId);
+      
+      // Get fresh patient data directly from the database
+      let patientData = await getPatient(user.uid, invoice.patientId);
+      
+      // If not found in database, try to get from local state as fallback
+      if (!patientData) {
+        console.log('Patient not found in database, trying local cache...');
+        patientData = patients.find(p => p.id === invoice.patientId) || null;
+        
+        if (patientData) {
+          console.log('Found patient in local cache:', patientData);
+        }
+      }
+      
+      // If we still can't find the patient, check if invoice has patient name directly
+      if (!patientData && invoice.patientName) {
+        console.log('Creating synthetic patient from invoice data');
+        // Create a minimal patient object from invoice data
+        patientData = {
+          id: invoice.patientId,
+          name: invoice.patientName,
+          email: '', // We'll check if email is missing and handle it below
+          phone: '',
+          dateOfBirth: '',
+          gender: '',
+          address: '',
+          insuranceProvider: '',
+          insuranceNumber: '',
+          status: 'Active'
+        };
+      }
+      
+      if (!patientData || !patientData.email) {
+        // Prompt user to enter email manually as last resort
+        toast({
+          title: "Email not found",
+          description: "Patient email address is not available. Please enter an email address below and click Send.",
+          variant: "destructive",
+          action: (
+            <div className="flex items-center mt-2">
+              <form 
+                className="flex w-full gap-2" 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const input = e.currentTarget.querySelector('#manual-email') as HTMLInputElement;
+                  if (input && input.value && input.value.includes('@')) {
+                    const manualEmail = input.value;
+                    sendInvoiceEmail(user.uid, invoice, manualEmail)
+                      .then(result => {
+                        if (result.success) {
+                          toast({
+                            title: "Email sent",
+                            description: `Invoice sent to ${manualEmail}`,
+                          });
+                        } else {
+                          toast({
+                            title: "Email failed",
+                            description: result.message,
+                            variant: "destructive",
+                          });
+                        }
+                      });
+                  }
+                }}
+              >
+                <Input 
+                  id="manual-email"
+                  type="email"
+                  placeholder="Enter email address"
+                  className="h-8"
+                  required
+                />
+                <Button type="submit" variant="outline" className="h-8 px-2">
+                  Send
+                </Button>
+              </form>
+            </div>
+          )
+        });
+        
+        // Log debugging information
+        console.error('Patient email not available:', {
+          patientId: invoice.patientId,
+          patientData
+        });
+        return;
+      }
+      
+      console.log('Sending email to patient:', patientData.email);
+      
+      // Send invoice confirmation email
+      const result = await sendInvoiceEmail(user.uid, invoice, patientData.email);
+      
+      // Show result toast
+      if (result.success) {
+        toast({
+          title: "Email sent",
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: "Email failed",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error sending invoice email:', error);
+      toast({
+        title: 'Error',
+        description: 'There was a problem sending the invoice email.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+      setSendingEmailId(null);
+    }
+  };
+
   // Define the useEffect for updating the newInvoice when settings change
   useEffect(() => {
     if (settings) {
@@ -595,6 +800,33 @@ const Invoices = () => {
       });
     }
   }, [settings]);
+
+  // Confirm deletion
+  const confirmDelete = async () => {
+    if (!invoiceToDelete) return;
+
+    try {
+      await deleteInvoice(invoiceToDelete);
+      
+      // Update local state
+      setInvoices(prev => prev.filter(p => p.id !== invoiceToDelete));
+      
+      toast({
+        title: 'Success',
+        description: 'Invoice deleted successfully.',
+      });
+    } catch (error) {
+      console.error('Error deleting invoice:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete invoice.',
+        variant: 'destructive',
+      });
+    } finally {
+      setShowDeleteDialog(false);
+      setInvoiceToDelete(null);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -646,6 +878,15 @@ const Invoices = () => {
                             ))}
                           </SelectContent>
                         </Select>
+                        {newInvoice.patientId && (
+                          <div className="mt-2 text-sm">
+                            <p><strong>Patient:</strong> {newInvoice.patientName}</p>
+                            <p>
+                              <strong>Email:</strong> {selectedPatientEmail || 
+                                <span className="text-destructive">(No email provided)</span>}
+                            </p>
+                          </div>
+                        )}
                       </div>
                       
                       <div className="space-y-2">
@@ -790,7 +1031,7 @@ const Invoices = () => {
                       </div>
                     </div>
                   </div>
-                  <DialogFooter>
+                  <DialogFooter className="flex flex-wrap gap-2">
                     <DialogClose asChild>
                       <Button variant="outline">Cancel</Button>
                     </DialogClose>
@@ -801,6 +1042,17 @@ const Invoices = () => {
                     >
                       Create Invoice
                     </Button>
+                    {selectedPatientEmail && (
+                      <Button 
+                        type="button" 
+                        onClick={handleCreateAndSendInvoice}
+                        disabled={!newInvoice.patientId || loading}
+                        className="flex items-center gap-1"
+                      >
+                        <Mail className="h-4 w-4" />
+                        Create & Send
+                      </Button>
+                    )}
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -897,6 +1149,11 @@ const Invoices = () => {
                             <DropdownMenuItem onClick={() => handleShowPDF(invoice)}>
                               <FileText className="h-4 w-4 mr-2" />
                               Generate PDF
+                            </DropdownMenuItem>
+                            
+                            <DropdownMenuItem onClick={() => handleSendInvoiceEmail(invoice)}>
+                              <Mail className="h-4 w-4 mr-2" />
+                              {sendingEmailId === invoice.id ? 'Sending...' : 'Send Email'}
                             </DropdownMenuItem>
                             
                             <DropdownMenuSeparator />
