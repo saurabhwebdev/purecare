@@ -53,17 +53,121 @@ export const sendAppointmentEmail = async (
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${emailSubject}</title>
   <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { text-align: center; margin-bottom: 20px; }
-    .logo { font-size: 24px; font-weight: bold; color: #4f46e5; margin-bottom: 10px; }
-    .appointment-details { background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-    .details-row { display: flex; margin-bottom: 10px; }
-    .details-label { font-weight: bold; width: 130px; }
-    .details-value { flex: 1; }
-    .patient-info { margin-bottom: 20px; }
-    .clinic-info { font-size: 14px; color: #6b7280; text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
-    .footer { text-align: center; font-size: 12px; color: #9ca3af; margin-top: 30px; }
-    .button { display: inline-block; background-color: #4f46e5; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px; font-weight: bold; margin-top: 10px; }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      line-height: 1.6; 
+      color: #333; 
+      max-width: 600px; 
+      margin: 0 auto; 
+      padding: 20px;
+      background-color: #f9fafb;
+    }
+    .container {
+      background-color: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+      padding: 30px;
+      margin-bottom: 20px;
+    }
+    .header { 
+      text-align: center; 
+      margin-bottom: 30px; 
+      border-bottom: 2px solid #f3f4f6;
+      padding-bottom: 20px;
+    }
+    .logo { 
+      font-size: 28px; 
+      font-weight: bold; 
+      color: #4f46e5; 
+      margin-bottom: 10px; 
+    }
+    .appointment-badge {
+      display: inline-block;
+      background-color: #4f46e5;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    .greeting {
+      font-size: 18px;
+      margin-bottom: 20px;
+    }
+    .appointment-details { 
+      background-color: #f9fafb; 
+      border-radius: 10px;
+      padding: 25px; 
+      margin-bottom: 25px; 
+    }
+    .details-row { 
+      display: flex; 
+      margin-bottom: 15px;
+      align-items: flex-start;
+    }
+    .details-label { 
+      font-weight: 600; 
+      width: 130px; 
+      color: #6b7280;
+    }
+    .details-value { 
+      flex: 1; 
+    }
+    .patient-info { 
+      margin-bottom: 25px; 
+      background-color: #f9fafb;
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .clinic-info { 
+      font-size: 14px; 
+      color: #6b7280; 
+      text-align: center; 
+      margin-top: 30px; 
+      padding-top: 20px; 
+      border-top: 1px solid #e5e7eb; 
+    }
+    .footer { 
+      text-align: center; 
+      font-size: 12px; 
+      color: #9ca3af; 
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .button { 
+      display: inline-block;
+      background-color: #4f46e5; 
+      color: white !important; 
+      padding: 12px 24px; 
+      text-decoration: none; 
+      border-radius: 6px; 
+      font-weight: 600;
+      margin-right: 10px;
+      transition: background-color 0.3s;
+    }
+    .button:hover {
+      background-color: #4338ca;
+    }
+    .button-calendar {
+      background-color: #10b981;
+    }
+    .button-calendar:hover {
+      background-color: #059669;
+    }
+    .button-section {
+      text-align: center;
+      margin: 30px 0;
+    }
+    .icon {
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 8px;
+      width: 20px;
+      height: 20px;
+      background-repeat: no-repeat;
+      background-position: center;
+    }
     @media (max-width: 600px) {
       .details-row { flex-direction: column; }
       .details-label { width: 100%; margin-bottom: 5px; }
@@ -71,67 +175,75 @@ export const sendAppointmentEmail = async (
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="logo">${clinicInfo.name}</div>
-    <p>Appointment Confirmation</p>
-  </div>
-  
-  <p>Dear ${patient?.name || appointment.patientName},</p>
-  
-  <p>This email confirms your appointment with ${appointment.provider} at ${clinicInfo.name}.</p>
-  
-  <div class="appointment-details">
-    <div class="details-row">
-      <div class="details-label">Date:</div>
-      <div class="details-value">${appointmentDate}</div>
+  <div class="container">
+    <div class="header">
+      <div class="logo">${clinicInfo.name}</div>
+      <div class="appointment-badge">Appointment Confirmation</div>
     </div>
-    <div class="details-row">
-      <div class="details-label">Time:</div>
-      <div class="details-value">${appointmentTime} - ${appointmentEndTime}</div>
+    
+    <p class="greeting">Hello ${patient?.name || appointment.patientName},</p>
+    
+    <p>Your appointment has been successfully scheduled with <strong>${appointment.provider}</strong> at ${clinicInfo.name}.</p>
+    
+    <div class="appointment-details">
+      <div class="details-row">
+        <div class="details-label">📅 Date:</div>
+        <div class="details-value">${appointmentDate}</div>
+      </div>
+      <div class="details-row">
+        <div class="details-label">⏰ Time:</div>
+        <div class="details-value">${appointmentTime} - ${appointmentEndTime}</div>
+      </div>
+      <div class="details-row">
+        <div class="details-label">⏱️ Duration:</div>
+        <div class="details-value">${appointment.duration} minutes</div>
+      </div>
+      <div class="details-row">
+        <div class="details-label">🏥 Type:</div>
+        <div class="details-value">${appointment.type}</div>
+      </div>
+      <div class="details-row">
+        <div class="details-label">👨‍⚕️ Provider:</div>
+        <div class="details-value">${appointment.provider}</div>
+      </div>
+      ${appointment.notes ? `
+      <div class="details-row">
+        <div class="details-label">📝 Notes:</div>
+        <div class="details-value">${appointment.notes}</div>
+      </div>` : ''}
     </div>
-    <div class="details-row">
-      <div class="details-label">Duration:</div>
-      <div class="details-value">${appointment.duration} minutes</div>
-    </div>
-    <div class="details-row">
-      <div class="details-label">Appointment Type:</div>
-      <div class="details-value">${appointment.type}</div>
-    </div>
-    <div class="details-row">
-      <div class="details-label">Provider:</div>
-      <div class="details-value">${appointment.provider}</div>
-    </div>
-    ${appointment.notes ? `
-    <div class="details-row">
-      <div class="details-label">Notes:</div>
-      <div class="details-value">${appointment.notes}</div>
-    </div>` : ''}
-  </div>
 
-  ${patient ? `
-  <div class="patient-info">
-    <p><strong>Your Information:</strong></p>
-    <p>Name: ${patient.name}<br>
-    Phone: ${patient.phone}<br>
-    Email: ${patient.email}</p>
-  </div>` : ''}
-  
-  <p><strong>Clinic Location:</strong><br>
-  ${clinicInfo.address}</p>
-  
-  <p>If you need to reschedule or cancel your appointment, please contact us at ${clinicInfo.phone} or ${clinicInfo.email}.</p>
-  
-  <div class="clinic-info">
-    <p>${clinicInfo.name}<br>
-    ${clinicInfo.address}<br>
-    Phone: ${clinicInfo.phone}<br>
-    Email: ${clinicInfo.email}
-    ${clinicInfo.website ? `<br>Website: <a href="${clinicInfo.website}">${clinicInfo.website}</a>` : ''}
-    </p>
-  </div>
-  
-  <div class="footer">
-    <p>This is an automated message, please do not reply to this email.</p>
+    <div class="button-section">
+      <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`Appointment with ${appointment.provider}`)}&dates=${formatDateTimeForGoogleCalendar(appointment.date, appointment.time, appointment.duration)}&details=${encodeURIComponent(`Appointment Type: ${appointment.type}\nProvider: ${appointment.provider}\n${appointment.notes ? `Notes: ${appointment.notes}` : ''}`)}&location=${encodeURIComponent(clinicInfo.address)}" class="button button-calendar" target="_blank">
+        Add to Calendar
+      </a>
+    </div>
+
+    ${patient ? `
+    <div class="patient-info">
+      <p style="margin-top: 0;"><strong>Your Information:</strong></p>
+      <p style="margin-bottom: 0;">👤 Name: ${patient.name}<br>
+      📞 Phone: ${patient.phone}<br>
+      ✉️ Email: ${patient.email}</p>
+    </div>` : ''}
+    
+    <p><strong>📍 Clinic Location:</strong><br>
+    ${clinicInfo.address}</p>
+    
+    <p>If you need to reschedule or cancel your appointment, please contact us at ${clinicInfo.phone} or ${clinicInfo.email}.</p>
+    
+    <div class="clinic-info">
+      <p>${clinicInfo.name}<br>
+      ${clinicInfo.address}<br>
+      Phone: ${clinicInfo.phone}<br>
+      Email: ${clinicInfo.email}
+      ${clinicInfo.website ? `<br>Website: <a href="${clinicInfo.website}" style="color: #4f46e5; text-decoration: none;">${clinicInfo.website}</a>` : ''}
+      </p>
+    </div>
+    
+    <div class="footer">
+      <p>This is an automated message, please do not reply to this email.</p>
+    </div>
   </div>
 </body>
 </html>
@@ -141,9 +253,9 @@ export const sendAppointmentEmail = async (
     const plainText = `
 APPOINTMENT CONFIRMATION
 
-Dear ${patient?.name || appointment.patientName},
+Hello ${patient?.name || appointment.patientName},
 
-This email confirms your appointment with ${appointment.provider} at ${clinicInfo.name}.
+Your appointment has been successfully scheduled with ${appointment.provider} at ${clinicInfo.name}.
 
 APPOINTMENT DETAILS:
 Date: ${appointmentDate}
@@ -152,6 +264,8 @@ Duration: ${appointment.duration} minutes
 Appointment Type: ${appointment.type}
 Provider: ${appointment.provider}
 ${appointment.notes ? `Notes: ${appointment.notes}` : ''}
+
+To add this appointment to your calendar, please click the "Add to Calendar" link in the HTML version of this email.
 
 ${patient ? `YOUR INFORMATION:
 Name: ${patient.name}
@@ -250,26 +364,79 @@ This is an automated message, please do not reply to this email.
  */
 const getGmailAccessToken = async (userId: string): Promise<string | null> => {
   try {
-    // Try to get token from localStorage
+    // Try to get token from localStorage first
     const tokenJson = localStorage.getItem('gmail_token');
     const userIdJson = localStorage.getItem('gmail_user_id');
     
     if (tokenJson && userIdJson === userId) {
       const token = JSON.parse(tokenJson);
       
-      // Check if token is expired
+      // Check if token is not expired
       if (token.expires_at && token.expires_at > Date.now()) {
         return token.access_token;
       }
     }
     
-    // If no valid token in storage, redirect to Gmail authentication
-    // This would usually be handled by the Gmail service
-    // For simplicity, we'll return null here and let the caller handle the error
+    // Token expired or not found, use Gmail service to authenticate or refresh
+    // Import dynamically to avoid circular dependencies
+    const { ensureGmailReady } = await import('./gmailService');
+    const ready = await ensureGmailReady(userId);
+    
+    if (ready) {
+      // After authentication, the token should be in localStorage
+      const newTokenJson = localStorage.getItem('gmail_token');
+      if (newTokenJson) {
+        const newToken = JSON.parse(newTokenJson);
+        return newToken.access_token;
+      }
+    } else {
+      // If authentication failed, redirect to settings
+      if (typeof window !== 'undefined') {
+        alert('Your Gmail authentication has expired. Please re-authenticate in Settings.');
+        window.location.href = `/settings?tab=integrations&promptGmail=true`;
+      }
+    }
+    
     return null;
   } catch (error) {
     console.error('Error getting Gmail access token:', error);
+    
+    // Show a more helpful error message to the user
+    if (typeof window !== 'undefined') {
+      alert('There was a problem authenticating with Gmail. Please check your settings and try again.');
+      window.location.href = '/settings?tab=integrations&promptGmail=true';
+    }
+    
     return null;
+  }
+};
+
+/**
+ * Format date and time for Google Calendar link
+ */
+const formatDateTimeForGoogleCalendar = (date: string, time: string, duration: number): string => {
+  try {
+    // Parse start date and time
+    const startDate = parseISO(date);
+    const [hours, minutes] = time.split(':').map(Number);
+    
+    // Create full start datetime
+    const startDateTime = new Date(startDate);
+    startDateTime.setHours(hours, minutes, 0, 0);
+    
+    // Create end datetime (add duration)
+    const endDateTime = new Date(startDateTime);
+    endDateTime.setMinutes(endDateTime.getMinutes() + duration);
+    
+    // Format for Google Calendar (YYYYMMDDTHHmmssZ/YYYYMMDDTHHmmssZ)
+    const formatForCalendar = (date: Date) => {
+      return date.toISOString().replace(/-|:|\.\d+/g, '');
+    };
+    
+    return `${formatForCalendar(startDateTime)}/${formatForCalendar(endDateTime)}`;
+  } catch (error) {
+    console.error('Error formatting date for calendar:', error);
+    return '';
   }
 };
 

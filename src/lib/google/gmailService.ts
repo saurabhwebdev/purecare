@@ -336,7 +336,7 @@ const isTokenValid = (): boolean => {
  * Authenticate with Gmail API
  * @param userId The user ID
  */
-const authenticateWithGmail = async (userId: string): Promise<boolean> => {
+export const authenticateWithGmail = async (userId: string): Promise<boolean> => {
   try {
     // Get user settings
     const settings = await getUserSettings(userId);
@@ -417,7 +417,7 @@ const authenticateWithGmail = async (userId: string): Promise<boolean> => {
  * Ensure Gmail API is initialized and authenticated
  * @param userId The user ID
  */
-const ensureGmailReady = async (userId: string): Promise<boolean> => {
+export const ensureGmailReady = async (userId: string): Promise<boolean> => {
   try {
     // Get user settings
     const settings = await getUserSettings(userId);
